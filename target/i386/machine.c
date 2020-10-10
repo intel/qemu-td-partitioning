@@ -1586,6 +1586,33 @@ static const VMStateDescription vmstate_arch_lbr = {
     }
 };
 
+static bool cet_needed(void *opaque)
+{
+    X86CPU *cpu = opaque;
+    CPUX86State *env = &cpu->env;
+
+    return !!((env->features[FEAT_7_0_ECX] & CPUID_7_0_ECX_CET_SHSTK) ||
+              (env->features[FEAT_7_0_EDX] & CPUID_7_0_EDX_CET_IBT));
+}
+
+static const VMStateDescription vmstate_cet = {
+    .name = "cpu/cet",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .needed = cet_needed,
+    .fields = (VMStateField[]) {
+        VMSTATE_UINT64(env.u_cet, X86CPU),
+        VMSTATE_UINT64(env.s_cet, X86CPU),
+        VMSTATE_UINT64(env.guest_ssp, X86CPU),
+        VMSTATE_UINT64(env.pl0_ssp, X86CPU),
+        VMSTATE_UINT64(env.pl1_ssp, X86CPU),
+        VMSTATE_UINT64(env.pl2_ssp, X86CPU),
+        VMSTATE_UINT64(env.pl3_ssp, X86CPU),
+        VMSTATE_UINT64(env.ssp_table_addr, X86CPU),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
 static bool triple_fault_needed(void *opaque)
 {
     X86CPU *cpu = opaque;
@@ -1745,6 +1772,7 @@ const VMStateDescription vmstate_x86_cpu = {
         &vmstate_msr_tsx_ctrl,
         &vmstate_msr_intel_sgx,
         &vmstate_pdptrs,
+        &vmstate_cet,
         &vmstate_msr_xfd,
 #ifdef TARGET_X86_64
         &vmstate_amx_xtile,
