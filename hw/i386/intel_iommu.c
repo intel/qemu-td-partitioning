@@ -6081,7 +6081,13 @@ static int vtd_post_load(void *opaque, int version_id)
      */
     vtd_switch_address_space_all(iommu);
 
-    vtd_migration_replay_pasid(iommu);
+    if (iommu->scalable_modern && iommu->root_scalable) {
+        printf("Replay pasid bindings after migration\n");
+        vtd_migration_replay_pasid(iommu);
+    } else {
+        printf("Replay DMA mappings after migration\n");
+        vtd_iommu_replay_all(iommu);
+    }
 
     return 0;
 }
