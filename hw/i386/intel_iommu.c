@@ -6833,6 +6833,13 @@ static void vtd_address_space_unmap(VTDAddressSpace *as, IOMMUNotifier *n)
     DMAMap map;
 
     /*
+     * If no IOMMU_NOTIFIER_UNMAP support, no need to go further
+     * as bleow code requires to notify unmap.
+     */
+    if (!(n->notifier_flags & IOMMU_NOTIFIER_UNMAP)) {
+        return;
+    }
+    /*
      * Note: all the codes in this function has a assumption that IOVA
      * bits are no more than VTD_MGAW bits (which is restricted by
      * VT-d spec), otherwise we need to consider overflow of 64 bits.
