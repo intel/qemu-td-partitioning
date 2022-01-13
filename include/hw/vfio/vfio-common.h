@@ -53,6 +53,8 @@ typedef struct VFIOMmap {
     size_t size;
 } VFIOMmap;
 
+typedef struct VFIORegionMmap VFIORegionMmap;
+
 typedef struct VFIORegion {
     struct VFIODevice *vbasedev;
     off_t fd_offset; /* offset of region within device fd */
@@ -62,7 +64,13 @@ typedef struct VFIORegion {
     uint32_t nr_mmaps;
     VFIOMmap *mmaps;
     uint8_t nr; /* cache the region number for debug */
+    VFIORegionMmap *rg_map;
 } VFIORegion;
+
+typedef struct VFIORegionMmap {
+    VFIORegion *region;
+    VFIOMmap *mmap;
+} VFIORegionMmap;
 
 typedef struct VFIOMigration {
     struct VFIODevice *vbasedev;
