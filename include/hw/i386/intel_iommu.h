@@ -203,6 +203,7 @@ struct VTDIOTLBEntry {
     uint64_t pte;
     uint64_t mask;
     uint8_t access_flags;
+    uint16_t sm_pe_flags;
 };
 
 struct VTDPageReqDsc {
