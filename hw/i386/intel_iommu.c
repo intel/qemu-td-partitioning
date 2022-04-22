@@ -1428,7 +1428,7 @@ static int vtd_page_walk_one(IOMMUTLBEvent *event, vtd_page_walk_info *info)
             if (!memcmp(mapped, &target, sizeof(target))) {
                 trace_vtd_page_walk_one_skip_map(entry->iova, entry->addr_mask,
                                                  entry->translated_addr);
-                return 0;
+                goto do_map;
             } else {
                 /*
                  * Translation changed.  Normally this should not
@@ -1479,6 +1479,7 @@ static int vtd_page_walk_one(IOMMUTLBEvent *event, vtd_page_walk_info *info)
     trace_vtd_page_walk_one(info->domain_id, entry->iova,
                             entry->translated_addr, entry->addr_mask,
                             entry->perm);
+do_map:
     return hook_fn(event, private);
 }
 
