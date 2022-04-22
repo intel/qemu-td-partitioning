@@ -55,6 +55,7 @@ enum {
 	IOMMUFD_CMD_UNSET_DEV_DATA,
 	IOMMUFD_CMD_HWPT_SET_DIRTY,
 	IOMMUFD_CMD_HWPT_GET_DIRTY_IOVA,
+	IOMMUFD_CMD_HWPT_GET_DIRTY,
 	IOMMUFD_CMD_DEVICE_GET_CAPS,
 	IOMMUFD_CMD_PAGE_RESPONSE,
 };
@@ -860,9 +861,9 @@ struct iommu_unset_dev_data {
  * @IOMMU_DIRTY_TRACKING_DISABLED: Disables dirty tracking
  * @IOMMU_DIRTY_TRACKING_ENABLED: Enables dirty tracking
  */
-enum iommufd_hwpt_set_dirty_flags {
+enum iommufd_set_dirty_flags {
 	IOMMU_DIRTY_TRACKING_DISABLED = 0,
-	IOMMU_DIRTY_TRACKING_ENABLED = 1,
+	IOMMU_DIRTY_TRACKING_ENABLED = 1 << 0,
 };
 
 /**
