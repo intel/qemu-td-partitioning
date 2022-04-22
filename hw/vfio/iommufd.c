@@ -35,6 +35,7 @@
 #include "sysemu/reset.h"
 #include "qemu/cutils.h"
 #include "qemu/char_dev.h"
+#include "exec/ram_addr.h"
 #include "migration/migration.h"
 
 static VFIODevice *iommufd_dev_iter_next(VFIOContainer *bcontainer,
@@ -106,6 +107,34 @@ static int iommufd_set_dirty_page_tracking(VFIOContainer *bcontainer,
 
     bcontainer->dirty_pages_supported = start;
     return 0;
+}
+
+static int iommufd_query_dirty_bitmap(VFIOContainer *bcontainer,
+                                      VFIOBitmap *vbmap, uint64_t iova,
+                                      uint64_t size)
+{
+    VFIOIOMMUFDContainer *container = container_of(bcontainer,
+                                                   VFIOIOMMUFDContainer,
+                                                   bcontainer);
+    int ret;
+    VFIOIOASHwpt *hwpt;
+    unsigned long page_size;
+
+    if (!bcontainer->dirty_pages_supported) {
+        return 0;
+    }
+
+    page_size = qemu_real_host_page_size();
+    QLIST_FOREACH(hwpt, &container->hwpt_list, next) {
+        ret = iommufd_backend_get_dirty_iova(container->be, hwpt->hwpt_id,
+                                             iova, size, page_size,
+                                             vbmap->bitmap);
+        if (ret) {
+            break;
+        }
+    }
+
+    return ret;
 }
 
 static int vfio_get_devicefd(const char *sysfs_path, Error **errp)
@@ -549,6 +578,7 @@ static void vfio_iommu_backend_iommufd_ops_class_init(ObjectClass *oc,
     ops->attach_device = iommufd_attach_device;
     ops->detach_device = iommufd_detach_device;
     ops->set_dirty_page_tracking = iommufd_set_dirty_page_tracking;
+    ops->query_dirty_bitmap = iommufd_query_dirty_bitmap;
 }
 
 static int vfio_iommu_device_attach_hwpt(IOMMUFDDevice *idev,
