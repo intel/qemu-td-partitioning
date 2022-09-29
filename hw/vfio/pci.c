@@ -3030,6 +3030,23 @@ int vfio_populate_vga(VFIOPCIDevice *vdev, Error **errp)
     return 0;
 }
 
+void vfio_bars_set_trap(VFIODevice *vbasedev, bool trap)
+{
+    VFIOPCIDevice *vdev = container_of(vbasedev, VFIOPCIDevice, vbasedev);
+    int i;
+    bool enabled = !trap;
+
+    for (i = VFIO_PCI_BAR0_REGION_INDEX; i < VFIO_PCI_ROM_REGION_INDEX; i++) {
+        VFIORegion *region = &vdev->bars[i].region;
+
+        if (region->flags & VFIO_REGION_INFO_FLAG_MMAP &&
+                region->flags & VFIO_REGION_INFO_FLAG_DYNAMIC_TRAP) {
+           vfio_region_mmaps_set_enabled(region, enabled);
+        }
+    }
+    return;
+}
+
 static void vfio_populate_device(VFIOPCIDevice *vdev, Error **errp)
 {
     VFIODevice *vbasedev = &vdev->vbasedev;

@@ -336,6 +336,7 @@ static int vfio_save_setup(QEMUFile *f, void *opaque)
     VFIODevice *vbasedev = opaque;
     VFIOMigration *migration = vbasedev->migration;
     uint64_t stop_copy_size = VFIO_MIG_DEFAULT_DATA_BUFFER_SIZE;
+    int ret;
 
     qemu_put_be64(f, VFIO_MIG_FLAG_DEV_SETUP_STATE);
 
@@ -375,7 +376,13 @@ static int vfio_save_setup(QEMUFile *f, void *opaque)
 
     qemu_put_be64(f, VFIO_MIG_FLAG_END_OF_STATE);
 
-    return qemu_file_get_error(f);
+    ret = qemu_file_get_error(f);
+    if (ret) {
+        return ret;
+    }
+
+    vfio_bars_set_trap(vbasedev, true);
+    return ret;
 }
 
 static void vfio_save_cleanup(void *opaque)

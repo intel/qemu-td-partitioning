@@ -261,6 +261,7 @@ int vfio_spapr_remove_window(VFIOLegacyContainer *container,
 
 bool vfio_migration_realize(VFIODevice *vbasedev, Error **errp);
 void vfio_migration_exit(VFIODevice *vbasedev);
+void vfio_bars_set_trap(VFIODevice *vbasedev, bool trap);
 
 int vfio_bitmap_alloc(VFIOBitmap *vbmap, hwaddr size);
 bool vfio_devices_all_running_and_mig_active(VFIOContainer *container);
