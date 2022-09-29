@@ -381,7 +381,6 @@ static int vfio_save_setup(QEMUFile *f, void *opaque)
         return ret;
     }
 
-    vfio_bars_set_trap(vbasedev, true);
     return ret;
 }
 
@@ -712,6 +711,10 @@ static void vfio_migration_state_notifier(Notifier *notifier, void *data)
                                  VFIO_DEVICE_STATE_ERROR);
         break;
     case MIGRATION_STATUS_COMPLETING:
+        /* switch to slow path before stopping device */
+        qemu_mutex_lock_iothread(); // needs to hold this lock since the notifier chain caller doesn't hold it
+        vfio_bars_set_trap(vbasedev, true);
+        qemu_mutex_unlock_iothread();
         vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_STOP,
                                      VFIO_DEVICE_STATE_ERROR);
     }
