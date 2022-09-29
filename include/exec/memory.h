@@ -2432,6 +2432,8 @@ void memory_region_del_subregion(MemoryRegion *mr,
  */
 void memory_region_set_enabled(MemoryRegion *mr, bool enabled);
 
+void memory_region_set_enabled_locked(MemoryRegion *mr, bool enabled);
+
 /*
  * memory_region_set_address: dynamically update the address of a region
  *

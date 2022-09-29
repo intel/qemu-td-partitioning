@@ -3041,7 +3041,7 @@ void vfio_bars_set_trap(VFIODevice *vbasedev, bool trap)
 
         if (region->flags & VFIO_REGION_INFO_FLAG_MMAP &&
                 region->flags & VFIO_REGION_INFO_FLAG_DYNAMIC_TRAP) {
-           vfio_region_mmaps_set_enabled(region, enabled);
+           vfio_region_mmaps_set_enabled_locked(region, enabled);
         }
     }
     return;
