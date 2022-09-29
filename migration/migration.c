@@ -1360,6 +1360,7 @@ bool migration_is_idle(void)
     case MIGRATION_STATUS_SETUP:
     case MIGRATION_STATUS_CANCELLING:
     case MIGRATION_STATUS_ACTIVE:
+    case MIGRATION_STATUS_COMPLETING:
     case MIGRATION_STATUS_POSTCOPY_ACTIVE:
     case MIGRATION_STATUS_COLO:
     case MIGRATION_STATUS_PRE_SWITCHOVER:
@@ -2300,6 +2301,11 @@ static void migration_completion(MigrationState *s)
     int current_active_state = s->state;
 
     if (s->state == MIGRATION_STATUS_ACTIVE) {
+        migrate_set_state(&s->state, current_active_state,
+                MIGRATION_STATUS_COMPLETING);
+        current_active_state = s->state;
+        notifier_list_notify(&migration_state_notifiers, s);
+
         qemu_mutex_lock_iothread();
         s->downtime_start = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
         qemu_system_wakeup_request(QEMU_WAKEUP_REASON_OTHER, NULL);

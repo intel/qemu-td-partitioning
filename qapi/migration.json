@@ -162,13 +162,16 @@
 # @wait-unplug: wait for device unplug request by guest OS to be
 #     completed.  (since 4.2)
 #
+# @completing: migration is going to be completed, added to notify to stop
+#              device
+#
 # Since: 2.3
 ##
 { 'enum': 'MigrationStatus',
   'data': [ 'none', 'setup', 'cancelling', 'cancelled',
             'active', 'postcopy-active', 'postcopy-paused',
             'postcopy-recover', 'completed', 'failed', 'colo',
-            'pre-switchover', 'device', 'wait-unplug' ] }
+            'pre-switchover', 'device', 'wait-unplug', 'completing' ] }
 ##
 # @VfioStats:
 #
