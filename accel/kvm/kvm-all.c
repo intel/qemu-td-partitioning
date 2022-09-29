@@ -3238,15 +3238,35 @@ int kvm_cpu_exec(CPUState *cpu)
             ret = 0;
             break;
         case KVM_EXIT_MMIO:
+        {
+            MemTxResult rc;
+
+            attrs.non_post = (run->mmio.is_write & 0x2) ? 1 : 0;
+
             DPRINTF("handle_mmio\n");
+            if (run->mmio.is_write & 0x2) {
+                printf("%s, %s addr: %llx, attrs.non_post: %s - 1\n",
+                       __func__, (run->mmio.is_write & 0x1) ? "write":"read",
+                       (unsigned long long) run->mmio.phys_addr, attrs.non_post ? "non_post":"post");
+            }
             /* Called outside BQL */
-            address_space_rw(&address_space_memory,
-                             run->mmio.phys_addr, attrs,
-                             run->mmio.data,
-                             run->mmio.len,
-                             run->mmio.is_write);
+            rc = address_space_rw(&address_space_memory,
+                                  run->mmio.phys_addr, attrs,
+                                  run->mmio.data,
+                                  run->mmio.len,
+                                  run->mmio.is_write & 0x1);
+            if (run->mmio.is_write & 0x2 && rc == MEMTX_ERROR) {
+                printf("%s, addr: %llx, failed\n", __func__, (unsigned long long) run->mmio.phys_addr);
+                run->mmio.is_write |= 0x4;
+            }
+            if (run->mmio.is_write & 0x2) {
+                printf("%s, %s addr: %llx, attrs.non_post: %s - 2\n",
+                       __func__, (run->mmio.is_write & 0x1) ? "write":"read",
+		       (unsigned long long) run->mmio.phys_addr, attrs.non_post ? "non_post":"post");
+            }
             ret = 0;
             break;
+        }
         case KVM_EXIT_IRQ_WINDOW_OPEN:
             DPRINTF("irq_window_open\n");
             ret = EXCP_INTERRUPT;

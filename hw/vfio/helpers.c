@@ -151,8 +151,8 @@ int vfio_set_irq_signaling(VFIODevice *vbasedev, int index, int subindex,
 /*
  * IO Port/MMIO - Beware of the endians, VFIO is always little endian
  */
-void vfio_region_write(void *opaque, hwaddr addr,
-                       uint64_t data, unsigned size)
+int vfio_region_write(void *opaque, hwaddr addr,
+                      uint64_t data, unsigned size)
 {
     VFIORegion *region = opaque;
     VFIODevice *vbasedev = region->vbasedev;
@@ -162,6 +162,7 @@ void vfio_region_write(void *opaque, hwaddr addr,
         uint32_t dword;
         uint64_t qword;
     } buf;
+    int ret = 0;
 
     switch (size) {
     case 1:
@@ -182,6 +183,7 @@ void vfio_region_write(void *opaque, hwaddr addr,
     }
 
     if (pwrite(vbasedev->fd, &buf, size, region->fd_offset + addr) != size) {
+        ret = -EIO;
         error_report("%s(%s:region%d+0x%"HWADDR_PRIx", 0x%"PRIx64
                      ",%d) failed: %m",
                      __func__, vbasedev->name, region->nr,
@@ -199,6 +201,7 @@ void vfio_region_write(void *opaque, hwaddr addr,
      * getting quite a few host interrupts per guest interrupt.
      */
     vbasedev->ops->vfio_eoi(vbasedev);
+    return ret;
 }
 
 uint64_t vfio_region_read(void *opaque,
@@ -246,9 +249,36 @@ uint64_t vfio_region_read(void *opaque,
     return data;
 }
 
+static MemTxResult vfio_region_write_with_attrs(void *opaque,
+                                                hwaddr addr,
+                                                uint64_t data,
+                                                unsigned size,
+                                                MemTxAttrs attrs)
+{
+    if (attrs.non_post) {
+        printf("%s, addr: %llx\n", __func__, (unsigned long long) addr);
+    }
+    /* only return error when attrs.non_post is set */
+    if (vfio_region_write(opaque, addr, data, size) && attrs.non_post) {
+        return MEMTX_ERROR;
+    } else {
+        return MEMTX_OK;
+    }
+}
+
+static MemTxResult vfio_region_read_with_attrs(void *opaque,
+                                               hwaddr addr,
+                                               uint64_t *data,
+                                               unsigned size,
+                                               MemTxAttrs attrs)
+{
+    *data = vfio_region_read(opaque, addr, size);
+    return MEMTX_OK;
+}
+
 const MemoryRegionOps vfio_region_ops = {
-    .read = vfio_region_read,
-    .write = vfio_region_write,
+    .read_with_attrs = vfio_region_read_with_attrs,
+    .write_with_attrs = vfio_region_write_with_attrs,
     .endianness = DEVICE_LITTLE_ENDIAN,
     .valid = {
         .min_access_size = 1,
