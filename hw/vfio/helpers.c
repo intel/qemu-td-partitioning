@@ -460,10 +460,12 @@ int vfio_region_mmap(VFIORegion *region)
 
         name = g_strdup_printf("%s mmaps[%d]",
                                memory_region_name(region->mem), i);
-        memory_region_init_ram_device_ptr(&region->mmaps[i].mem,
+        memory_region_init_ram_device_ptr_ops(&region->mmaps[i].mem,
                                           memory_region_owner(region->mem),
                                           name, region->mmaps[i].size,
-                                          region->mmaps[i].mmap);
+                                          region->mmaps[i].mmap,
+                                          (void *)region,
+                                          &vfio_region_ops);
         g_free(name);
 
         if (secure)

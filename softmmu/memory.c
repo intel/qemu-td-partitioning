@@ -1712,18 +1712,20 @@ void memory_region_init_ram_ptr(MemoryRegion *mr,
     memory_region_init_ram_debug_ops(mr);
 }
 
-void memory_region_init_ram_device_ptr(MemoryRegion *mr,
+void memory_region_init_ram_device_ptr_ops(MemoryRegion *mr,
                                        Object *owner,
                                        const char *name,
                                        uint64_t size,
-                                       void *ptr)
+                                       void *ptr,
+                                       void *opaque,
+                                       const MemoryRegionOps *ops)
 {
     memory_region_init(mr, owner, name, size);
     mr->ram = true;
     mr->terminates = true;
     mr->ram_device = true;
-    mr->ops = &ram_device_mem_ops;
-    mr->opaque = mr;
+    mr->ops = ops;
+    mr->opaque = opaque;
     mr->destructor = memory_region_destructor_ram;
 
     /* qemu_ram_alloc_from_ptr cannot fail with ptr != NULL.  */
@@ -1731,6 +1733,16 @@ void memory_region_init_ram_device_ptr(MemoryRegion *mr,
     mr->ram_block = qemu_ram_alloc_from_ptr(size, ptr, mr, &error_fatal);
 
     memory_region_init_ram_debug_ops(mr);
+}
+
+void memory_region_init_ram_device_ptr(MemoryRegion *mr,
+                                       Object *owner,
+                                       const char *name,
+                                       uint64_t size,
+                                       void *ptr)
+{
+    memory_region_init_ram_device_ptr_ops(mr, owner, name, size, ptr, mr,
+                                          &ram_device_mem_ops);
 }
 
 void memory_region_init_alias(MemoryRegion *mr,

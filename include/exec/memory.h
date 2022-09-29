@@ -1471,6 +1471,14 @@ void memory_region_init_ram_device_ptr(MemoryRegion *mr,
                                        uint64_t size,
                                        void *ptr);
 
+void memory_region_init_ram_device_ptr_ops(MemoryRegion *mr,
+                                       Object *owner,
+                                       const char *name,
+                                       uint64_t size,
+                                       void *ptr,
+                                       void *opaque,
+                                       const MemoryRegionOps *ops);
+
 /**
  * memory_region_init_alias: Initialize a memory region that aliases all or a
  *                           part of another memory region.
