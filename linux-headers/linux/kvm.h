@@ -437,6 +437,7 @@ struct kvm_run {
 			__u8  data[8];
 			__u32 len;
 			__u8  is_write;
+			__u8  np_data[64];
 		} mmio;
 		/* KVM_EXIT_HYPERCALL */
 		struct {

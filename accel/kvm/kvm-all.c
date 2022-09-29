@@ -3251,16 +3251,22 @@ int kvm_cpu_exec(CPUState *cpu)
             }
 
             /* Need lock to avoid race condition when sending 512bit operand through multi-threads */
-            if (run->mmio.len >= 64)
+            if (run->mmio.len >= 64) {
                 qemu_mutex_lock_iothread();
-            /* Called outside BQL */
-            rc = address_space_rw(&address_space_memory,
-                                  run->mmio.phys_addr, attrs,
-                                  run->mmio.data,
-                                  run->mmio.len,
-                                  run->mmio.is_write & 0x1);
-            if (run->mmio.len >= 64)
+                rc = address_space_rw(&address_space_memory,
+                                      run->mmio.phys_addr, attrs,
+                                      run->mmio.np_data,
+                                      run->mmio.len,
+                                      run->mmio.is_write & 0x1);
                 qemu_mutex_unlock_iothread();
+            } else {
+                /* Called outside BQL */
+                rc = address_space_rw(&address_space_memory,
+                                      run->mmio.phys_addr, attrs,
+                                      run->mmio.data,
+                                      run->mmio.len,
+                                      run->mmio.is_write & 0x1);
+            }
             if (run->mmio.is_write & 0x2 && rc == MEMTX_ERROR) {
                 printf("%s, addr: %llx, failed\n", __func__, (unsigned long long) run->mmio.phys_addr);
                 run->mmio.is_write |= 0x4;
