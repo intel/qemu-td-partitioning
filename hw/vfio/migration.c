@@ -711,7 +711,8 @@ static void vfio_migration_state_notifier(Notifier *notifier, void *data)
                                  VFIO_DEVICE_STATE_ERROR);
         break;
     case MIGRATION_STATUS_ACTIVE:
-        if (qatomic_read(&s->migration_pre_completed)) {
+        if (vbasedev->enable_dynamic_mmap &&
+            qatomic_read(&s->migration_pre_completed)) {
             info_report(":%s: Switch to slow path and toggle deivce state to stop-saving\n", vbasedev->name);
             /* switch to slow path before stopping device */
             qemu_mutex_lock_iothread(); // needs to hold this lock since the notifier chain caller doesn't hold it
@@ -876,6 +877,11 @@ bool vfio_migration_realize(VFIODevice *vbasedev, Error **errp)
     int ret;
 
     if (vbasedev->enable_migration == ON_OFF_AUTO_OFF) {
+        if (vbasedev->enable_dynamic_mmap) {
+            error_setg(&err, "%s: x-enable-dynamic-mmap is only available when"
+                             "enable-migration is enabled",
+                       vbasedev->name);
+        }
         error_setg(&err, "%s: Migration is disabled for VFIO device",
                    vbasedev->name);
         return !vfio_block_migration(vbasedev, err, errp);
