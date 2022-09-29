@@ -710,6 +710,10 @@ static void vfio_migration_state_notifier(Notifier *notifier, void *data)
          */
         vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_RUNNING,
                                  VFIO_DEVICE_STATE_ERROR);
+        break;
+    case MIGRATION_STATUS_COMPLETING:
+        vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_STOP,
+                                     VFIO_DEVICE_STATE_ERROR);
     }
 }
 
