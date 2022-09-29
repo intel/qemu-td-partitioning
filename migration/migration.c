@@ -1360,7 +1360,6 @@ bool migration_is_idle(void)
     case MIGRATION_STATUS_SETUP:
     case MIGRATION_STATUS_CANCELLING:
     case MIGRATION_STATUS_ACTIVE:
-    case MIGRATION_STATUS_COMPLETING:
     case MIGRATION_STATUS_POSTCOPY_ACTIVE:
     case MIGRATION_STATUS_COLO:
     case MIGRATION_STATUS_PRE_SWITCHOVER:
@@ -1400,6 +1399,7 @@ void migrate_init(MigrationState *s)
     s->setup_time = 0;
     s->start_postcopy = false;
     s->postcopy_after_devices = false;
+    s->migration_pre_completed = false;
     s->migration_thread_running = false;
     error_free(s->error);
     s->error = NULL;
@@ -2301,9 +2301,7 @@ static void migration_completion(MigrationState *s)
     int current_active_state = s->state;
 
     if (s->state == MIGRATION_STATUS_ACTIVE) {
-        migrate_set_state(&s->state, current_active_state,
-                MIGRATION_STATUS_COMPLETING);
-        current_active_state = s->state;
+        qatomic_set(&s->migration_pre_completed, true);
         notifier_list_notify(&migration_state_notifiers, s);
 
         qemu_mutex_lock_iothread();

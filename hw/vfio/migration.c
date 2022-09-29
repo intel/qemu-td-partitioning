@@ -710,13 +710,18 @@ static void vfio_migration_state_notifier(Notifier *notifier, void *data)
         vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_RUNNING,
                                  VFIO_DEVICE_STATE_ERROR);
         break;
-    case MIGRATION_STATUS_COMPLETING:
-        /* switch to slow path before stopping device */
-        qemu_mutex_lock_iothread(); // needs to hold this lock since the notifier chain caller doesn't hold it
-        vfio_bars_set_trap(vbasedev, true);
-        qemu_mutex_unlock_iothread();
-        vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_STOP_COPY,
+    case MIGRATION_STATUS_ACTIVE:
+        if (qatomic_read(&s->migration_pre_completed)) {
+            info_report(":%s: Switch to slow path and toggle deivce state to stop-saving\n", vbasedev->name);
+            /* switch to slow path before stopping device */
+            qemu_mutex_lock_iothread(); // needs to hold this lock since the notifier chain caller doesn't hold it
+            vfio_bars_set_trap(vbasedev, true);
+            qemu_mutex_unlock_iothread();
+
+            vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_STOP_COPY,
                                      VFIO_DEVICE_STATE_ERROR);
+        }
+        break;
     }
 }
 

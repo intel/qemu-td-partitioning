@@ -342,6 +342,9 @@ struct MigrationState {
     /* Flag set once the migration thread is running (and needs joining) */
     bool migration_thread_running;
 
+    /* Flag set when wanting to stop device */
+    bool migration_pre_completed;
+
     /* Flag set once the migration thread called bdrv_inactivate_all */
     bool block_inactive;
 
