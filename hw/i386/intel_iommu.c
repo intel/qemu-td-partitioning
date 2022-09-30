@@ -6030,6 +6030,11 @@ static void vtd_replay_pasid_allocation(IntelIOMMUState *s)
             VTDPASIDStoreEntry *entry = &s->vtd_pasid[j][k];
             int ret;
 
+            if (!j && !k) {
+                /* no need to do reallocation for PASID#0 */
+                continue;
+            }
+
             if (entry->allocated) {
                 ret = __vtd_alloc_host_pasid(s, !s->non_identical_pasid, &entry->hpasid);
                 if (ret) {
