@@ -3251,7 +3251,7 @@ int kvm_cpu_exec(CPUState *cpu)
             }
 
             /* Need lock to avoid race condition when sending 512bit operand through multi-threads */
-            if (run->mmio.len >= 64) {
+            if (run->mmio.len > 8) {
                 qemu_mutex_lock_iothread();
                 rc = address_space_rw(&address_space_memory,
                                       run->mmio.phys_addr, attrs,
