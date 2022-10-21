@@ -130,6 +130,14 @@ static int vfio_migration_set_state(VFIODevice *vbasedev,
 
     migration->device_state = new_state;
     if (mig_state->data_fd != -1) {
+        /* This check is not good. When starting live migration on src side, the
+         * state change sequence is:
+         * 2->3: get a valid mig_state->data_fd (e.g. 61), then set migration->data_fd to be same
+         * 3->1: driver returns a NULL filep so that the mig_state->data_fd is set to -1
+         * So, here will treat this as error "out of sync". In fact, the migration flow
+         * is not broken.
+         */
+#if 0
         if (migration->data_fd != -1) {
             /*
              * This can happen if the device is asynchronously reset and
@@ -140,6 +148,7 @@ static int vfio_migration_set_state(VFIODevice *vbasedev,
 
             return -EBADF;
         }
+#endif
 
         migration->data_fd = mig_state->data_fd;
     }
