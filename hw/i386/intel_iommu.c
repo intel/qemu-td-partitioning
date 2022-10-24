@@ -6053,12 +6053,16 @@ static void vtd_replay_pasid_allocation(IntelIOMMUState *s)
             }
 
             if (entry->allocated) {
-                ret = __vtd_alloc_host_pasid(s, !s->non_identical_pasid, &entry->hpasid);
+                uint32_t pasid;
+
+                pasid = entry->gpasid;
+                ret = __vtd_alloc_host_pasid(s, !s->non_identical_pasid, &pasid);
                 if (ret) {
                     error_report_once("%s: gpasid: %u failed to get"
                           " correspond hpasid", __func__, entry->gpasid);
                     continue;
                 }
+                entry->hpasid = pasid;
                 printf("%s, alloc gpasid: %u, hpasid: %d, j/k (%d/%d)\n",
                        __func__, entry->gpasid, entry->hpasid, j, k);
             }
