@@ -1424,6 +1424,12 @@ int qemu_savevm_state_complete_precopy_non_iterable(QEMUFile *f,
             return ret;
         }
     }
+
+    ret = cgs_mig_savevm_state_end(f);
+    if (ret) {
+        return ret;
+    }
+
     if (!in_postcopy) {
         /* Postcopy stream will still be going */
         qemu_put_byte(f, QEMU_VM_EOF);
