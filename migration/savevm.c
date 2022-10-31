@@ -37,6 +37,7 @@
 #include "migration/global_state.h"
 #include "migration/channel-block.h"
 #include "ram.h"
+#include "cgs.h"
 #include "qemu-file.h"
 #include "savevm.h"
 #include "postcopy-ram.h"
@@ -1168,6 +1169,13 @@ void qemu_savevm_state_setup(QEMUFile *f)
     int ret;
 
     trace_savevm_state_setup();
+
+    /* cgs support with multifd will be added later */
+    if (!migrate_use_multifd() &&
+        cgs_mig_savevm_state_setup(f)) {
+        return;
+    }
+
     QTAILQ_FOREACH(se, &savevm_state.handlers, entry) {
         if (!se->ops || !se->ops->save_setup) {
             continue;
