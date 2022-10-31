@@ -51,11 +51,12 @@ int cgs_mig_savevm_state_setup(QEMUFile *f)
     if (!cgs_mig.savevm_state_setup) {
         return 0;
     }
+
     if (migrate_use_multifd()) {
         nr_channels = migrate_multifd_channels();
     }
 
-    ret = cgs_mig.loadvm_state_setup(nr_channels);
+    ret = cgs_mig.savevm_state_setup(nr_channels);
     cgs_check_error(f, ret);
 
     return ret;
@@ -174,4 +175,23 @@ void cgs_mig_savevm_state_cleanup(void)
     }
 
     cgs_mig.savevm_state_cleanup();
+}
+
+int cgs_mig_loadvm_state_setup(QEMUFile *f)
+{
+    int ret;
+    uint32_t nr_channels = 1;
+
+    if (!cgs_mig.loadvm_state_setup) {
+        return 0;
+    }
+
+    if (migrate_use_multifd()) {
+        nr_channels = migrate_multifd_channels();
+    }
+
+    ret = cgs_mig.loadvm_state_setup(nr_channels);
+    cgs_check_error(f, ret);
+
+    return ret;
 }
