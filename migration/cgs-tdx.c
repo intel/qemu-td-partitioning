@@ -14,6 +14,20 @@
 #include "cgs.h"
 #include "target/i386/kvm/tdx.h"
 
+typedef struct TdxMigStream {
+    int fd;
+    void *mbmd;
+    void *buf_list;
+    void *mac_list;
+    void *gpa_list;
+} TdxMigStream;
+
+typedef struct TdxMigState {
+    TdxMigStream *streams;
+} TdxMigState;
+
+TdxMigState tdx_mig;
+
 static bool tdx_mig_is_ready(void)
 {
     return tdx_premig_is_done();
