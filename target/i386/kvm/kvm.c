@@ -3029,6 +3029,10 @@ static int kvm_put_xsave(X86CPU *cpu)
     CPUX86State *env = &cpu->env;
     void *xsave = env->xsave_buf;
 
+    if (is_tdx_vm()) {
+        return 0;
+    }
+
     if (!has_xsave) {
         return kvm_put_fpu(cpu);
     }
@@ -3838,6 +3842,10 @@ static int kvm_get_xsave(X86CPU *cpu)
     CPUX86State *env = &cpu->env;
     void *xsave = env->xsave_buf;
     int type, ret;
+
+    if (is_tdx_vm()) {
+        return 0;
+    }
 
     if (!has_xsave) {
         return kvm_get_fpu(cpu);
