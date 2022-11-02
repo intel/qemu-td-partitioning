@@ -1018,6 +1018,14 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
         tdx_binding_with_migtd_hash();
     }
 
+    /*
+     * Don't finalize for the migration destination TD.
+     * It will be finalzed after all the TD states successfully imported.
+     */
+    if (runstate_check(RUN_STATE_INMIGRATE)) {
+        return;
+    }
+
     for_each_tdx_fw_entry(tdvf, entry) {
         struct kvm_tdx_init_mem_region mem_region = {
             .source_addr = (__u64)entry->mem_ptr,
