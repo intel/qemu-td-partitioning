@@ -3936,6 +3936,41 @@ void colo_flush_ram_cache(void)
     trace_colo_flush_ram_cache_end();
 }
 
+static int ram_load_update_cgs_bmap(RAMBlock *block, ram_addr_t offset,
+                                    bool is_private)
+{
+    unsigned long bit = offset >> TARGET_PAGE_BITS;
+    bool was_private;
+    hwaddr gpa;
+    int ret = 0;
+
+    /* Some RAMBlock,e.g. pc.bios, doesn't have cgs_bitmap */
+    if (!block->cgs_bmap) {
+        return 0;
+    }
+
+    was_private = test_bit(bit, block->cgs_bmap);
+    if (was_private == is_private) {
+        return 0;
+    }
+
+    /* Unaliased GPA is the same for both private pages and shared pages */
+    ret = kvm_physical_memory_addr_from_host(kvm_state,
+                                             block->host + offset, &gpa);
+    if (!ret) {
+        error_report("%s: fail to find gpa", __func__);
+        return -ENOENT;
+    }
+
+    ret = kvm_convert_memory(gpa, TARGET_PAGE_SIZE, is_private);
+    if (ret) {
+        error_report("%s: fail to convert, gpa=%lx, is_private=%d",
+                      __func__, gpa, is_private);
+    }
+
+    return ret;
+}
+
 /**
  * ram_load_precopy: load pages in precopy case
  *
@@ -4029,6 +4064,11 @@ static int ram_load_precopy(QEMUFile *f)
             }
 
             trace_ram_load_loop(block->idstr, (uint64_t)addr, flags, host);
+
+            ret = ram_load_update_cgs_bmap(block, addr, is_private);
+            if (ret) {
+                return ret;
+            }
         }
 
         switch (flags & ~RAM_SAVE_FLAG_CONTINUE) {
