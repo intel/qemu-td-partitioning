@@ -1372,7 +1372,7 @@ void machine_run_board_init(MachineState *machine, const char *mem_path, Error *
     if (machine->memdev) {
         ram_addr_t backend_size = object_property_get_uint(OBJECT(machine->memdev),
                                                            "size",  &error_abort);
-        if (backend_size != machine->ram_size) {
+        if (backend_size < machine->ram_size) {
             error_setg(errp, "Machine memory size does not match the size of the memory backend");
             return;
         }
