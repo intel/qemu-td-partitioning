@@ -2533,6 +2533,34 @@ static int ram_save_cgs_start_epoch(RAMState *rs)
     return 0;
 }
 
+void ram_save_cancel(void)
+{
+    RAMBlock *block = ram_state->last_seen_block;
+    unsigned long page = ram_state->last_page;
+    ram_addr_t offset = ((ram_addr_t)page) << TARGET_PAGE_BITS;
+    hwaddr gpa;
+    int ret;
+
+    if (!ram_counters.cgs_epochs) {
+        return;
+    } else if (ram_counters.cgs_epochs == 1) {
+        ret = kvm_physical_memory_addr_from_host(kvm_state,
+                                                 block->host + offset, &gpa);
+        assert(ret == 1);
+    } else {
+        /*
+         * All the pages have likely been saved in the first round. Just
+         * provide the end of the guest-physical page to cancel from.
+         */
+        gpa = ram_bytes_total() - TARGET_PAGE_SIZE;
+    }
+
+    ret = cgs_mig_savevm_state_ram_cancel(ram_state->f, gpa >> TARGET_PAGE_BITS);
+    if (ret) {
+        error_report("%s failed: %s", __func__, strerror(ret));
+    }
+}
+
 /**
  * ram_save_host_page: save a whole host page
  *
