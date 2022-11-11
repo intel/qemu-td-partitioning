@@ -404,6 +404,7 @@ static void vfio_save_cleanup(void *opaque)
     migration->precopy_dirty_size = 0;
     migration->initial_data_sent = false;
     vfio_migration_cleanup(vbasedev);
+    vfio_bars_set_trap(vbasedev, false);
     trace_vfio_save_cleanup(vbasedev->name);
 }
 
