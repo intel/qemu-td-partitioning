@@ -161,6 +161,7 @@ static const char* vm_type_name[] = {
     [KVM_X86_DEFAULT_VM] = "default",
     [KVM_X86_SW_PROTECTED_VM] = "sw-protected-vm",
     [KVM_X86_TDX_VM] = "tdx",
+    [KVM_X86_TD_PART_VM] = "td-part",
 };
 
 int kvm_get_vm_type(MachineState *ms, const char *vm_type)
@@ -175,6 +176,8 @@ int kvm_get_vm_type(MachineState *ms, const char *vm_type)
             kvm_type = KVM_X86_SW_PROTECTED_VM;
         } else if (!g_ascii_strcasecmp(vm_type, "tdx")) {
             kvm_type = KVM_X86_TDX_VM;
+	} else if (!g_ascii_strcasecmp(vm_type, "td-part")) {
+	    kvm_type = KVM_X86_TD_PART_VM;
         }else {
             error_report("Unknown kvm-type specified '%s'", vm_type);
             exit(1);
