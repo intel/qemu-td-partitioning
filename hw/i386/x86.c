@@ -1431,6 +1431,21 @@ static void machine_set_sgx_epc(Object *obj, Visitor *v, const char *name,
     qapi_free_SgxEPCList(list);
 }
 
+static char *x86_get_kvm_type(Object *obj, Error **errp)
+{
+    X86MachineState *x86ms = X86_MACHINE(obj);
+
+    return g_strdup(x86ms->kvm_type);
+}
+
+static void x86_set_kvm_type(Object *obj, const char *value, Error **errp)
+{
+    X86MachineState *x86ms = X86_MACHINE(obj);
+
+    g_free(x86ms->kvm_type);
+    x86ms->kvm_type = g_strdup(value);
+}
+
 static int x86_kvm_type(MachineState *ms, const char *vm_type)
 {
     return kvm_get_vm_type(ms, vm_type);
@@ -1520,6 +1535,11 @@ static void x86_machine_class_init(ObjectClass *oc, void *data)
         NULL, NULL);
     object_class_property_set_description(oc, "sgx-epc",
         "SGX EPC device");
+
+    object_class_property_add_str(oc, "kvm-type",
+                            x86_get_kvm_type, x86_set_kvm_type);
+    object_class_property_set_description(oc, "kvm-type",
+                                    "KVM guest type (legacy, tdx)");
 }
 
 static const TypeInfo x86_machine_info = {

@@ -48,6 +48,10 @@ extern bool kvm_ioeventfd_any_length_allowed;
 extern bool kvm_msi_use_devid;
 extern int kvm_vm_type;
 
+#define KVM_X86_DEFAULT_VM      0
+#define KVM_X86_TDX_VM          1
+#define KVM_X86_TD_PART_VM      2
+
 #define kvm_enabled()           (kvm_allowed)
 /**
  * kvm_irqchip_in_kernel:

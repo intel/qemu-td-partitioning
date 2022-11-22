@@ -55,6 +55,7 @@ struct X86MachineState {
 
     /* RAM information (sizes, addresses, configuration): */
     ram_addr_t below_4g_mem_size, above_4g_mem_size;
+    char *kvm_type;
 
     /* Start address of the initial RAM above 4G */
     uint64_t above_4g_mem_start;

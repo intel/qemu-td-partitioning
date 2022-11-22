@@ -152,16 +152,9 @@ static int kvm_get_one_msr(X86CPU *cpu, int index, uint64_t *value);
 
 static const char* vm_type_name[] = {
     [KVM_X86_DEFAULT_VM] = "X86_DEFAULT_VM",
-    [KVM_X86_TDX_VM] = "X86_TDX_VM",
+    [KVM_X86_TDX_VM]     = "X86_TDX_VM",
+    [KVM_X86_TD_PART_VM] = "X86_TD_Partitioned_VM",
 };
-
-/*
- * REVERTME: KVM_X86_TDX_VM was changed from 2 to 1.
- * Workaround to make qemu work with old value KVM_X86_TDX_VM 2 for ABI
- * compatibility.
- * Once the actual value is fixed for upstreaming, remove this workaround.
- */
-#define KVM_X86_TDX_VM_OLD  2
 
 int kvm_get_vm_type(MachineState *ms, const char *vm_type)
 {
@@ -169,6 +162,8 @@ int kvm_get_vm_type(MachineState *ms, const char *vm_type)
 
     if (ms->cgs && object_dynamic_cast(OBJECT(ms->cgs), TYPE_TDX_GUEST)) {
         kvm_type = KVM_X86_TDX_VM;
+    } else if (!strcmp(vm_type, "td-part")) {
+        kvm_type = KVM_X86_TD_PART_VM;
     }
 
     /*
@@ -180,17 +175,8 @@ int kvm_get_vm_type(MachineState *ms, const char *vm_type)
     }
 
     if (!(kvm_check_extension(KVM_STATE(ms->accelerator), KVM_CAP_VM_TYPES) & BIT(kvm_type))) {
-        if (kvm_type == KVM_X86_TDX_VM) {
-            kvm_type = KVM_X86_TDX_VM_OLD;
-            if (!(kvm_check_extension(KVM_STATE(ms->accelerator), KVM_CAP_VM_TYPES) & BIT(kvm_type))) {
-                error_report("vm-type %s not supported by KVM", vm_type_name[KVM_X86_TDX_VM]);
-                exit(1);
-            }
-        } else {
-            error_report("vm-type %s not supported by KVM", vm_type_name[kvm_type]);
-            exit(1);
-
-        }
+        error_report("vm-type %s not supported by KVM", vm_type_name[kvm_type]);
+        exit(1);
     }
 
     return kvm_type;
