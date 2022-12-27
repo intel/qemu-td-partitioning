@@ -297,22 +297,34 @@ static void microvm_memory_init(MicrovmMachineState *mms)
         x86ms->below_4g_mem_size = machine->ram_size;
     }
 
+    if (x86ms->above_4g_mem_start != 4 * GiB) {
+        error_report("Set microvm highmem start to 4GB! Currently set to: 0x%lx",
+                      x86ms->above_4g_mem_start);
+        exit(EXIT_FAILURE);
+    }
+
     ram_below_4g = g_malloc(sizeof(*ram_below_4g));
     memory_region_init_alias(ram_below_4g, NULL, "ram-below-4g", machine->ram,
                              0, x86ms->below_4g_mem_size);
     memory_region_add_subregion(system_memory, 0, ram_below_4g);
 
     e820_add_entry(0, x86ms->below_4g_mem_size, E820_RAM);
-
     if (x86ms->above_4g_mem_size > 0) {
         ram_above_4g = g_malloc(sizeof(*ram_above_4g));
-        memory_region_init_alias(ram_above_4g, NULL, "ram-above-4g",
-                                 machine->ram,
-                                 x86ms->below_4g_mem_size,
-                                 x86ms->above_4g_mem_size);
-        memory_region_add_subregion(system_memory, 0x100000000ULL,
+        if (kvm_vm_type == KVM_X86_TD_PART_VM) {
+            memory_region_init_alias(ram_above_4g, NULL, "ram-above-4g",
+                                     machine->ram,
+                                     x86ms->above_4g_mem_start,
+                                     x86ms->above_4g_mem_size);
+        } else {
+            memory_region_init_alias(ram_above_4g, NULL, "ram-above-4g",
+                                     machine->ram,
+                                     x86ms->below_4g_mem_size,
+                                     x86ms->above_4g_mem_size);
+        }
+        memory_region_add_subregion(system_memory, x86ms->above_4g_mem_start,
                                     ram_above_4g);
-        e820_add_entry(0x100000000ULL, x86ms->above_4g_mem_size, E820_RAM);
+        e820_add_entry(x86ms->above_4g_mem_start, x86ms->above_4g_mem_size, E820_RAM);
     }
 
     fw_cfg = fw_cfg_init_io_dma(FW_CFG_IO_BASE, FW_CFG_IO_BASE + 4,
