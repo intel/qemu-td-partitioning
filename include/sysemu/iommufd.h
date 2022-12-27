@@ -6,6 +6,7 @@
 #include "exec/hwaddr.h"
 #include "exec/cpu-common.h"
 #include "exec/memory.h"
+#include <linux/iommufd.h>
 
 #define TYPE_IOMMUFD_BACKEND "iommufd"
 OBJECT_DECLARE_TYPE(IOMMUFDBackend, IOMMUFDBackendClass,
@@ -57,4 +58,6 @@ int iommufd_backend_alloc_hwpt(int iommufd, uint32_t dev_id,
 
 int iommufd_backend_invalidate_cache(int iommufd, uint32_t hwpt_id,
                                      uint32_t len, void *data_ptr);
+int iommufd_backend_page_response(int iommufd, uint32_t hwpt_id,
+                          uint32_t dev_id, struct iommu_page_response *resp);
 #endif

@@ -69,6 +69,7 @@ typedef struct VTDPASIDAddressSpace VTDPASIDAddressSpace;
 typedef struct VTDHwpt VTDHwpt;
 typedef struct VTDPASIDStoreEntry VTDPASIDStoreEntry;
 typedef struct VTDPageReqDsc VTDPageReqDsc;
+typedef struct VTDPRQEntry VTDPRQEntry;
 
 /* Context-Entry */
 struct VTDContextEntry {
@@ -232,6 +233,13 @@ struct VTDPageReqDsc {
     uint64_t priv_data[2];
 };
 
+struct VTDPRQEntry {
+    PCIBus *bus;
+    int devfn;
+    VTDPageReqDsc prq;
+    QLIST_ENTRY(VTDPRQEntry) next;
+};
+
 /* VT-d Source-ID Qualifier types */
 enum {
     VTD_SQ_FULL = 0x00,     /* Full SID verification */
@@ -358,7 +366,8 @@ struct IntelIOMMUState {
     uint8_t iq_last_desc_type;      /* The type of last completed descriptor */
 
     /*
-     * Protect per-IOMMU prq head/tail/prq_entry_count modifications.
+     * Protect per-IOMMU prq head/tail/prq_entry_count modifications
+     * and the internal prq list updates.
      */
     QemuMutex prq_lock;
     dma_addr_t pqa;                 /* Page Request Queue Pointer */
@@ -368,6 +377,8 @@ struct IntelIOMMUState {
     uint64_t prq_qsize;             /* PRQ size in bytes */
     int prq_nb_entries;             /* PRQ size in number of entries */
     int prq_entry_count;            /* Used number of entries in PRQ */
+    /* list of VTDPRQEntry which were recevied and injected to guest */
+    QLIST_HEAD(, VTDPRQEntry) vtd_prq_list;
 
     /* The index of the Fault Recording Register to be used next.
      * Wraps around from N-1 to 0, where N is the number of FRCD_REG.
