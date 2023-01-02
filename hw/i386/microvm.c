@@ -57,6 +57,45 @@
 #define MICROVM_QBOOT_FILENAME "qboot.rom"
 #define MICROVM_BIOS_FILENAME  "bios-microvm.bin"
 
+static void microvm_machine_get_max_ram_below_4g(Object *obj, Visitor *v,
+                                                 const char *name, void *opaque,
+                                                 Error **errp)
+{
+    MicrovmMachineState *mms = MICROVM_MACHINE(obj);
+    uint64_t value = mms->max_ram_below_4g;
+
+    visit_type_size(v, name, &value, errp);
+}
+
+static void microvm_machine_set_max_ram_below_4g(Object *obj, Visitor *v,
+                                                 const char *name, void *opaque,
+                                                 Error **errp)
+{
+    MicrovmMachineState *mms = MICROVM_MACHINE(obj);
+    Error *error = NULL;
+    uint64_t value;
+
+    visit_type_size(v, name, &value, &error);
+    if (error) {
+        error_propagate(errp, error);
+        return;
+    }
+    if (value > 4 * GiB) {
+        error_setg(&error,
+                   "Machine option 'max-ram-below-4g=%"PRIu64
+                   "' expects size less than or equal to 4G", value);
+        error_propagate(errp, error);
+        return;
+    }
+
+    if (value < 1 * MiB) {
+        warn_report("Only %" PRIu64 " bytes of RAM below the 4GiB boundary,"
+                    "BIOS may not work with less than 1MiB", value);
+    }
+
+    mms->max_ram_below_4g = value;
+}
+
 static void microvm_set_rtc(MicrovmMachineState *mms, MC146818RtcState *s)
 {
     X86MachineState *x86ms = X86_MACHINE(mms);
@@ -289,6 +328,26 @@ static void microvm_memory_init(MicrovmMachineState *mms)
     FWCfgState *fw_cfg;
     ram_addr_t lowmem = 0xc0000000; /* 3G */
     int i;
+
+    /*
+     * Handle the machine opt max-ram-below-4g.  It is basically doing
+     * min(qemu limit, user limit).
+     */
+    if (!mms->max_ram_below_4g) {
+        mms->max_ram_below_4g = 1 * GiB;
+    }
+
+    if (lowmem > mms->max_ram_below_4g) {
+        lowmem = mms->max_ram_below_4g;
+        if (machine->ram_size - lowmem > lowmem &&
+            lowmem & (1 * GiB - 1)) {
+            warn_report("There is possibly poor performance as the ram size "
+                        " (0x%" PRIx64 ") is more then twice the size of"
+                        " max-ram-below-4g (%"PRIu64") and"
+                        " max-ram-below-4g is not a multiple of 1G.",
+                        (uint64_t)machine->ram_size, mms->max_ram_below_4g);
+        }
+    }
 
     if (machine->ram_size > lowmem) {
         x86ms->above_4g_mem_size = machine->ram_size - lowmem;
@@ -727,6 +786,12 @@ static void microvm_class_init(ObjectClass *oc, void *data)
     object_class_property_set_description(oc,
         MICROVM_MACHINE_AUTO_KERNEL_CMDLINE,
         "Set off to disable adding virtio-mmio devices to the kernel cmdline");
+
+    object_class_property_add(oc, MICROVM_MACHINE_MAX_RAM_BELOW_4G, "size",
+        microvm_machine_get_max_ram_below_4g, microvm_machine_set_max_ram_below_4g,
+        NULL, NULL);
+    object_class_property_set_description(oc, MICROVM_MACHINE_MAX_RAM_BELOW_4G,
+        "Maximum ram below the 4G boundary (32bit boundary)");
 
     machine_class_allow_dynamic_sysbus_dev(mc, TYPE_RAMFB_DEVICE);
 
