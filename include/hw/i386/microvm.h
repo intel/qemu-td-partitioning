@@ -68,6 +68,7 @@
 
 /* Machine type options */
 #define MICROVM_MACHINE_RTC                 "rtc"
+#define MICROVM_MACHINE_MAX_RAM_BELOW_4G    "max-ram-below-4g"
 #define MICROVM_MACHINE_PCIE                "pcie"
 #define MICROVM_MACHINE_IOAPIC2             "ioapic2"
 #define MICROVM_MACHINE_ISA_SERIAL          "isa-serial"
@@ -99,6 +100,7 @@ struct MicrovmMachineState {
     Notifier machine_done;
     Notifier powerdown_req;
     struct GPEXConfig gpex;
+    uint64_t max_ram_below_4g;
 
     /* device tree */
     void *fdt;
