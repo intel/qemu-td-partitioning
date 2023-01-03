@@ -1213,6 +1213,9 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
         if (!isapc_ram_fw) {
             memory_region_set_readonly(bios, true);
         }
+        if (kvm_vm_type == KVM_X86_TD_PART_VM) {
+            memory_region_set_nomap(bios, true);
+        }
         ret = rom_add_file_fixed(bios_name, (uint32_t)(-bios_size), -1);
         if (ret != 0) {
             goto bios_error;
