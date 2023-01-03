@@ -120,6 +120,7 @@ struct kvm_userspace_memory_region_ext {
 #define KVM_MEM_LOG_DIRTY_PAGES	(1UL << 0)
 #define KVM_MEM_READONLY	(1UL << 1)
 #define KVM_MEM_PRIVATE		(1UL << 2)
+#define KVM_MEM_NOMAP		(1UL << 3)
 
 /* for KVM_IRQ_LINE */
 struct kvm_irq_level {

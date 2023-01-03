@@ -748,6 +748,7 @@ struct MemoryRegion {
     bool subpage;
     bool readonly; /* For RAM regions */
     bool nonvolatile;
+    bool nomap;
     bool rom_device;
     bool flush_coalesced_mmio;
     uint8_t dirty_log_mask;
@@ -2142,6 +2143,8 @@ void memory_region_set_readonly(MemoryRegion *mr, bool readonly);
  * @nonvolatile: whether rhe region is to be non-volatile.
  */
 void memory_region_set_nonvolatile(MemoryRegion *mr, bool nonvolatile);
+
+void memory_region_set_nomap(MemoryRegion *mr, bool nomap);
 
 /**
  * memory_region_rom_device_set_romd: enable/disable ROMD mode

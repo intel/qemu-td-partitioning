@@ -498,6 +498,9 @@ static int kvm_mem_flags(MemoryRegion *mr)
     if (mr->ram_block && mr->ram_block->restricted_fd > 0) {
         flags |= KVM_MEM_PRIVATE;
     }
+    if (mr->nomap) {
+        flags |= KVM_MEM_NOMAP;
+    }
     return flags;
 }
 

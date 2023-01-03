@@ -2390,6 +2390,16 @@ void memory_region_set_nonvolatile(MemoryRegion *mr, bool nonvolatile)
     }
 }
 
+void memory_region_set_nomap(MemoryRegion *mr, bool nomap)
+{
+    if (mr->nomap != nomap) {
+        memory_region_transaction_begin();
+        mr->nomap = nomap;
+        memory_region_update_pending |= mr->enabled;
+        memory_region_transaction_commit();
+    }
+}
+
 void memory_region_rom_device_set_romd(MemoryRegion *mr, bool romd_mode)
 {
     if (mr->romd_mode != romd_mode) {
