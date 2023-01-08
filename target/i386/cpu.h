@@ -2201,6 +2201,8 @@ struct ArchCPU {
     int32_t hv_max_vps;
 
     bool xen_vapic;
+
+    char *l2_cache_topo_level;
 };
 
 
