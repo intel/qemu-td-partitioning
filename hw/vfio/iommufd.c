@@ -281,8 +281,8 @@ static int vfio_device_attach_container(VFIODevice *vbasedev,
     ret = iommufd_backend_alloc_hwpt(bind.iommufd, vbasedev->devid,
                                      container->ioas_id,
                                      IOMMU_HWPT_TYPE_DEFAULT,
-                                     0, NULL, &hwpt_id);
-
+                                     0, NULL, 0,
+                                     &hwpt_id, NULL);
     if (ret) {
         vfio_kvm_device_del_device(vbasedev);
         error_setg_errno(errp, errno, "error alloc shadow hwpt");

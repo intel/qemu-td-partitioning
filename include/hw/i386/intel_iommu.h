@@ -108,6 +108,10 @@ struct pasid_key {
 struct VTDHwpt {
     uint32_t hwpt_id;
     int iommufd;
+    int eventfd;
+    EventNotifier notifier;
+    int fault_fd;
+    uint32_t fault_tail_index;
     uint32_t parent_id; /* ioas_id or hwpt_id */
     uint32_t users;
 };

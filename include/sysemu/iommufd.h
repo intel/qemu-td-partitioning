@@ -47,13 +47,14 @@ int iommufd_backend_map_dma(IOMMUFDBackend *be, uint32_t ioas, hwaddr iova,
 int iommufd_backend_copy_dma(IOMMUFDBackend *be, uint32_t src_ioas,
                              uint32_t dst_ioas, hwaddr iova,
                              ram_addr_t size, bool readonly);
-int iommufd_backend_alloc_hwpt(int iommufd, uint32_t dev_id,
-                               uint32_t pt_id, uint32_t hwpt_type,
-                               uint32_t len, void *data_ptr,
-                               uint32_t *out_hwpt);
 int iommufd_backend_alloc_pasid(int iommufd, uint32_t min, uint32_t max,
                                 bool identical, uint32_t *pasid);
 int iommufd_backend_free_pasid(int iommufd, uint32_t pasid);
+int iommufd_backend_alloc_hwpt(int iommufd, uint32_t dev_id,
+                               uint32_t pt_id, uint32_t hwpt_type,
+                               uint32_t len, void *data_ptr, int fd,
+                               uint32_t *out_hwpt, int *out_fault_fd);
+
 int iommufd_backend_invalidate_cache(int iommufd, uint32_t hwpt_id,
                                      uint32_t len, void *data_ptr);
 #endif

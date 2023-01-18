@@ -2720,7 +2720,7 @@ static int vtd_get_s2_hwpt(IntelIOMMUState *s, IOMMUFDDevice *idev,
 
     ret = iommufd_backend_alloc_hwpt(iommufd->fd, idev->dev_id,
                                      ioas_id, IOMMU_HWPT_TYPE_DEFAULT,
-                                     0, NULL, s2_hwptid);
+                                     0, NULL, 0, s2_hwptid, NULL);
     if (!ret) {
         memory_listener_register(&iommufd->listener, &address_space_memory);
         s2_hwpt->hwpt_id = *s2_hwptid;
@@ -2759,12 +2759,27 @@ static void vtd_put_s2_hwpt(IOMMUFDDevice *idev)
     iommufd->s2_hwpt = NULL;
 }
 
+static void vtd_dma_fault_notifier_handler(void *opaque)
+{
+    info_report("vtd: Unable to handle PRQ so far");
+}
+
 static int vtd_init_fl_hwpt(IntelIOMMUState *s, VTDHwpt *hwpt,
                             IOMMUFDDevice *idev, VTDPASIDEntry *pe)
 {
     struct iommu_hwpt_vtd_s1 vtd;
+    EventNotifier *n = &hwpt->notifier;
     uint32_t hwpt_id, s2_hwptid;
-    int ret;
+    int ret, fd, fault_data_fd;
+
+    ret = event_notifier_init(n, 0);
+    if (ret) {
+        error_report("vtd: Unable to init event notifier for dma fault (%d)",
+                     ret);
+        return ret;
+    }
+
+    fd = event_notifier_get_fd(n);
 
     vtd_init_fl_hwpt_data(&vtd, pe);
 
@@ -2775,7 +2790,8 @@ static int vtd_init_fl_hwpt(IntelIOMMUState *s, VTDHwpt *hwpt,
 
     ret = iommufd_backend_alloc_hwpt(idev->iommufd->fd, idev->dev_id,
                                      s2_hwptid, IOMMU_HWPT_TYPE_VTD_S1,
-                                     sizeof(vtd), &vtd, &hwpt_id);
+                                     sizeof(vtd), &vtd, fd, &hwpt_id,
+				     &fault_data_fd);
     if (ret) {
         vtd_put_s2_hwpt(idev);
         return ret;
@@ -2783,14 +2799,21 @@ static int vtd_init_fl_hwpt(IntelIOMMUState *s, VTDHwpt *hwpt,
 
     hwpt->hwpt_id = hwpt_id;
     hwpt->iommufd = idev->iommufd->fd;
+    hwpt->eventfd = fd;
+    hwpt->fault_fd = fault_data_fd;
+    hwpt->fault_tail_index = 0;
     hwpt->parent_id = s2_hwptid;
+    qemu_set_fd_handler(fd, vtd_dma_fault_notifier_handler, NULL, hwpt);
     return 0;
 }
 
 static void vtd_destroy_fl_hwpt(IOMMUFDDevice *idev, VTDHwpt *hwpt)
 {
+    qemu_set_fd_handler(hwpt->eventfd, NULL, NULL, hwpt);
+    close(hwpt->fault_fd);
     iommufd_backend_free_id(hwpt->iommufd, hwpt->hwpt_id);
     vtd_put_s2_hwpt(idev);
+    event_notifier_cleanup(&hwpt->notifier);
 }
 
 static int vtd_dev_get_rid2pasid(IntelIOMMUState *s, uint8_t bus_num,
