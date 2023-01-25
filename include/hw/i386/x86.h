@@ -122,7 +122,8 @@ void x86_cpu_unplug_cb(HotplugHandler *hotplug_dev,
                        DeviceState *dev, Error **errp);
 
 void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
-                       MemoryRegion *rom_memory, bool isapc_ram_fw);
+                       const char *firmware2, MemoryRegion *rom_memory,
+                       bool isapc_ram_fw);
 
 void x86_load_linux(X86MachineState *x86ms,
                     FWCfgState *fw_cfg,
@@ -151,5 +152,6 @@ DeviceState *ioapic_init_secondary(GSIState *gsi_state);
 
 /* pc_sysfw.c */
 void x86_firmware_configure(void *ptr, int size);
+void x86_firmware2_configure(void *ptr, int size);
 
 #endif

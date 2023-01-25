@@ -209,7 +209,7 @@ void pc_system_firmware_init(PCMachineState *pcms,
     BlockBackend *pflash_blk[ARRAY_SIZE(pcms->flash)];
 
     if (!pcmc->pci_enabled) {
-        x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, true);
+        x86_bios_rom_init(MACHINE(pcms), "bios.bin", pcms->firmware2, rom_memory, true);
         return;
     }
 
@@ -230,7 +230,7 @@ void pc_system_firmware_init(PCMachineState *pcms,
 
     if (!pflash_blk[0]) {
         /* Machine property pflash0 not set, use ROM mode */
-        x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, false);
+        x86_bios_rom_init(MACHINE(pcms), "bios.bin", pcms->firmware2, rom_memory, false);
     } else {
         if (kvm_enabled() && !kvm_readonly_mem_enabled()) {
             /*
@@ -272,5 +272,16 @@ void x86_firmware_configure(void *ptr, int size)
             error_report("failed to parse TDVF for TDX VM");
             exit(1);
         }
+    }
+}
+
+void x86_firmware2_configure(void *ptr, int size)
+{
+    if (is_tdx_vm()) {
+        if (!ptr) {
+            error_report("failed to configure BIOS2 for TDX VM");
+            exit(1);
+        }
+        tdx_add_bios2(ptr, size);
     }
 }

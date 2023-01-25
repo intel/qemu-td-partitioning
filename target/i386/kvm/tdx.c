@@ -1064,6 +1064,20 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
     ram_block = tdx_guest->tdvf_region->ram_block;
     ram_block_discard_range(ram_block, 0, ram_block->max_length);
 
+    if (tdx_guest->bios2_ptr) {
+        struct kvm_tdx_init_mem_region mem_region = {
+            .source_addr = (__u64)tdx_guest->bios2_ptr,
+            .gpa = (__u64)((uint32_t)-tdx_guest->bios2_size),
+            .nr_pages = tdx_guest->bios2_size / 4096,
+        };
+
+        r = tdx_vm_ioctl(KVM_TDX_INIT_MEM_REGION, 0, &mem_region);
+        if (r < 0) {
+             error_report("KVM_TDX_INIT_MEM_REGION failed %s", strerror(-r));
+             exit(1);
+        }
+    }
+
     r = tdx_vm_ioctl(KVM_TDX_FINALIZE_VM, 0, NULL);
     if (r < 0) {
         error_report("KVM_TDX_FINALIZE_VM failed %s", strerror(-r));
@@ -1247,6 +1261,12 @@ out:
 int tdx_parse_tdvf(void *flash_ptr, int size)
 {
     return tdvf_parse_metadata(&tdx_guest->tdvf, flash_ptr, size);
+}
+
+void tdx_add_bios2(void *flash_ptr, int size)
+{
+    tdx_guest->bios2_ptr = flash_ptr;
+    tdx_guest->bios2_size = size;
 }
 
 static bool tdx_guest_get_sept_ve_disable(Object *obj, Error **errp)
