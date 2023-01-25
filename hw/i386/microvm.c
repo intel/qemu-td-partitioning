@@ -284,6 +284,7 @@ static void microvm_memory_init(MicrovmMachineState *mms)
     MachineState *machine = MACHINE(mms);
     X86MachineState *x86ms = X86_MACHINE(mms);
     MemoryRegion *ram_below_4g, *ram_above_4g;
+    MemoryRegion *bios;
     MemoryRegion *system_memory = get_system_memory();
     FWCfgState *fw_cfg;
     ram_addr_t lowmem = 0xc0000000; /* 3G */
@@ -307,6 +308,14 @@ static void microvm_memory_init(MicrovmMachineState *mms)
     memory_region_init_alias(ram_below_4g, NULL, "ram-below-4g", machine->ram,
                              0, x86ms->below_4g_mem_size);
     memory_region_add_subregion(system_memory, 0, ram_below_4g);
+
+    if (kvm_vm_type == KVM_X86_TD_PART_VM) {
+        bios = g_malloc(sizeof(*bios));
+        memory_region_init_alias(bios, NULL, "pc.bios", machine->ram,
+                                 4 * GiB - 2 * MiB, 2 * MiB);
+        /* TODO make the code region read-only */
+        memory_region_add_subregion(system_memory, 4 * GiB - 2 * MiB, bios);
+    }
 
     e820_add_entry(0, x86ms->below_4g_mem_size, E820_RAM);
     if (x86ms->above_4g_mem_size > 0) {
