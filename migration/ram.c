@@ -4379,11 +4379,16 @@ static int ram_load_precopy(QEMUFile *f)
         }
 
         if (flags & (RAM_SAVE_FLAG_ZERO | RAM_SAVE_FLAG_PAGE |
-                     RAM_SAVE_FLAG_COMPRESS_PAGE | RAM_SAVE_FLAG_XBZRLE)) {
+                     RAM_SAVE_FLAG_COMPRESS_PAGE | RAM_SAVE_FLAG_XBZRLE |
+                     RAM_SAVE_FLAG_CGS_STATE)) {
             RAMBlock *block = ram_block_from_stream(mis, f, flags,
                                                     RAM_CHANNEL_PRECOPY);
+            bool is_private = flags & RAM_SAVE_FLAG_CGS_STATE;
 
-            host = host_from_ram_block_offset(block, addr);
+            if (!is_private) {
+                host = host_from_ram_block_offset(block, addr);
+            }
+
             /*
              * After going into COLO stage, we should not load the page
              * into SVM's memory directly, we put them into colo_cache firstly.
@@ -4395,7 +4400,7 @@ static int ram_load_precopy(QEMUFile *f)
              * speed of the migration, but it obviously reduce the downtime of
              * back-up all SVM'S memory in COLO preparing stage.
              */
-            if (migration_incoming_colo_enabled()) {
+            if (!is_private && migration_incoming_colo_enabled()) {
                 if (migration_incoming_in_colo_state()) {
                     /* In COLO stage, put all pages into cache temporarily */
                     host = colo_cache_from_block_offset(block, addr, true);
@@ -4407,12 +4412,12 @@ static int ram_load_precopy(QEMUFile *f)
                     host_bak = colo_cache_from_block_offset(block, addr, false);
                 }
             }
-            if (!host) {
+            if (!is_private && !host) {
                 error_report("Illegal RAM offset " RAM_ADDR_FMT, addr);
                 ret = -EINVAL;
                 break;
             }
-            if (!migration_incoming_in_colo_state()) {
+            if (!is_private && !migration_incoming_in_colo_state()) {
                 ramblock_recv_bitmap_set(block, host);
             }
 
@@ -4511,6 +4516,7 @@ static int ram_load_precopy(QEMUFile *f)
             break;
 
         case RAM_SAVE_FLAG_CGS_EPOCH:
+        case RAM_SAVE_FLAG_CGS_STATE:
             if (cgs_mig_loadvm_state(f) < 0) {
                 error_report(" Failed to load cgs state");
                 ret = -EINVAL;
