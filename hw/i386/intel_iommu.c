@@ -3363,6 +3363,7 @@ static int vtd_bind_guest_pasid(VTDPASIDAddressSpace *vtd_pasid_as,
     uint32_t pasid, rid_pasid;
     int devfn = vtd_pasid_as->devfn;
     int ret = -1;
+    CPUState *cpu;
     struct vtd_as_key key = {
         .bus = vtd_pasid_as->bus,
         .devfn = devfn,
@@ -3386,14 +3387,23 @@ static int vtd_bind_guest_pasid(VTDPASIDAddressSpace *vtd_pasid_as,
         return -1;
     }
 
+    if (!current_cpu) {
+        CPU_FOREACH(cpu) {
+            if (cpu)
+                break;
+        }
+    } else {
+        cpu = current_cpu;
+    }
+
     switch (op) {
     case VTD_PASID_UPDATE:
     case VTD_PASID_BIND:
     {
         ret = vtd_device_attach_pgtbl(vtd_idev, pe, vtd_pasid_as, rid_pasid);
         /* Bypass gpasid 0 */
-        if (!ret && vtd_pasid_as->pasid) {
-            ret = kvm_bind_pasid(current_cpu, vtd_pasid_as->pasid, pasid, 1);
+        if (!ret && vtd_pasid_as->pasid && cpu) {
+            ret = kvm_bind_pasid(cpu, vtd_pasid_as->pasid, pasid, 1);
         }
         break;
     }
@@ -3401,8 +3411,8 @@ static int vtd_bind_guest_pasid(VTDPASIDAddressSpace *vtd_pasid_as,
     {
         ret = vtd_device_detach_pgtbl(idev, vtd_pasid_as, rid_pasid);
         /* Bypass gpasid 0 */
-        if (!ret && vtd_pasid_as->pasid) {
-            ret = kvm_bind_pasid(current_cpu, vtd_pasid_as->pasid, pasid, 0);
+        if (!ret && vtd_pasid_as->pasid && cpu) {
+            ret = kvm_bind_pasid(cpu, vtd_pasid_as->pasid, pasid, 0);
         }
         break;
     }
