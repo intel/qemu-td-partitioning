@@ -6248,6 +6248,7 @@ static Property vtd_properties[] = {
     DEFINE_PROP_BOOL("dma-translation", IntelIOMMUState, dma_translation, true),
     DEFINE_PROP_LINK("iommufd", IntelIOMMUState, iommufd,
                      TYPE_IOMMUFD_BACKEND, IOMMUFDBackend *),
+    DEFINE_PROP_BOOL("pasid-migration", IntelIOMMUState, non_identical_pasid, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 
