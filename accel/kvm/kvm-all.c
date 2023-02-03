@@ -3790,6 +3790,22 @@ bool kvm_device_supported(int vmfd, uint64_t type)
     return (ioctl(vmfd, KVM_CREATE_DEVICE, &create_dev) >= 0);
 }
 
+int kvm_bind_pasid(CPUState *cs, uint32_t gpasid, uint32_t hpasid, int bind)
+{
+    struct kvm_bind_pasid pb;
+    int r;
+
+    pb.spid = gpasid;
+    pb.id = hpasid;
+    pb.bind = bind;
+    r = kvm_vcpu_ioctl(cs, KVM_BIND_PASID, &pb);
+    if (r) {
+        error_report("Bind(%d) gpasid %u to hpasid %u failed\n",
+                     bind, gpasid, hpasid);
+    }
+    return r;
+}
+
 int kvm_set_one_reg(CPUState *cs, uint64_t id, void *source)
 {
     struct kvm_one_reg reg;

@@ -913,6 +913,12 @@ struct kvm_guest_debug {
 	struct kvm_guest_debug_arch arch;
 };
 
+struct kvm_bind_pasid {
+	__u32 spid;
+	__u32 id;
+	int bind;
+};
+
 enum {
 	kvm_ioeventfd_flag_nr_datamatch,
 	kvm_ioeventfd_flag_nr_pio,
@@ -2337,6 +2343,8 @@ struct kvm_stats_desc {
 
 /* Available with KVM_CAP_XSAVE2 */
 #define KVM_GET_XSAVE2		  _IOR(KVMIO,  0xcf, struct kvm_xsave)
+
+#define KVM_BIND_PASID  _IOW(KVMIO,  0xd1, struct kvm_bind_pasid)
 
 /* Available with KVM_CAP_S390_PROTECTED_DUMP */
 #define KVM_S390_PV_CPU_COMMAND	_IOWR(KVMIO, 0xd0, struct kvm_pv_cmd)

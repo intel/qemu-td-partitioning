@@ -543,6 +543,8 @@ bool kvm_kernel_irqchip_split(void);
  */
 int kvm_arch_irqchip_create(KVMState *s);
 
+int kvm_bind_pasid(CPUState *cs, uint32_t gpasid, uint32_t hpasid, int bind);
+
 /**
  * kvm_set_one_reg - set a register value in KVM via KVM_SET_ONE_REG ioctl
  * @id: The register ID

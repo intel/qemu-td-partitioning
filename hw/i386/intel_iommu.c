@@ -96,6 +96,8 @@ static int vtd_dev_send_page_response(IntelIOMMUState *s, PCIBus *bus,
                                       struct iommu_page_response *pg_resp);
 static void vtd_assemble_pg_resp(struct iommu_page_response *pg_resp,
                                  VTDPageReqDsc prq, int code);
+static VTDPASIDStoreEntry *vtd_pasid_find_by_idx(IntelIOMMUState *s,
+                                                 uint32_t idx);
 
 static void vtd_panic_require_caching_mode(void)
 {
@@ -3143,6 +3145,26 @@ static int vtd_dev_get_rid2pasid(IntelIOMMUState *s, uint8_t bus_num,
     return ret;
 }
 
+static int vtd_hpasid_find_by_guest(IntelIOMMUState *s, uint32_t *pasid)
+{
+    VTDPASIDStoreEntry *entry;
+    int ret;
+
+    /* Identical g/h pasid */
+    if (!s->non_identical_pasid) {
+        return 0;
+    }
+
+    ret = 0;
+    entry = vtd_pasid_find_by_idx(s, *pasid);
+    if (entry) {
+        *pasid = entry->hpasid;
+    } else {
+        ret = -ENODEV;
+    }
+    return ret;
+}
+
 static int vtd_device_attach_pgtbl(VTDIOMMUFDDevice *vtd_idev,
                                    VTDPASIDEntry *pe,
                                    VTDPASIDAddressSpace *vtd_pasid_as,
@@ -3152,6 +3174,7 @@ static int vtd_device_attach_pgtbl(VTDIOMMUFDDevice *vtd_idev,
     IOMMUFDDevice *idev = vtd_idev->idev;
     VTDHwpt *hwpt = &vtd_pasid_as->hwpt;
     int ret;
+    uint32_t hpasid = 0;
 
     /* If pe->gptt != FLT, should be go ahead to do bind as host only
      * accepts guest FLT under nesting. If pe->pgtt==PT, should setup
@@ -3182,12 +3205,20 @@ static int vtd_device_attach_pgtbl(VTDIOMMUFDDevice *vtd_idev,
         hwpt->iommufd = idev->iommufd->fd;
     }
 
-    if (vtd_pasid_as->pasid == rid_pasid) {
+    hpasid = vtd_pasid_as->pasid;
+    printf("%s, vtd_hpasid_find_by_guest gpasid=%u- 1\n", __func__, vtd_pasid_as->pasid);
+    ret = vtd_hpasid_find_by_guest(s, &hpasid);
+    printf("%s, vtd_hpasid_find_by_guest hpasid %u - 2\n", __func__, hpasid);
+    if (ret || hpasid == rid_pasid) {
+        hpasid = vtd_pasid_as->pasid;
+    }
+
+    if (hpasid == rid_pasid) {
         ret = iommufd_device_attach_hwpt(idev, hwpt->hwpt_id);
-        printf("%s, try to bind PASID %u - 1, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
+        printf("%s, try to bind PASID %u - 1, ret: %d\n", __func__, hpasid, ret);
     } else {
-        ret = iommufd_device_pasid_attach_hwpt(idev, vtd_pasid_as->pasid, hwpt->hwpt_id);
-        printf("%s, try to bind PASID %u - 2, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
+        ret = iommufd_device_pasid_attach_hwpt(idev, hpasid, hwpt->hwpt_id);
+        printf("%s, try to bind PASID %u - 2, ret: %d\n", __func__, hpasid, ret);
     }
 
     if (ret) {
@@ -3241,7 +3272,7 @@ static int vtd_bind_guest_pasid(VTDPASIDAddressSpace *vtd_pasid_as,
     IntelIOMMUState *s = vtd_pasid_as->iommu_state;
     VTDIOMMUFDDevice *vtd_idev;
     IOMMUFDDevice *idev;
-    uint32_t rid_pasid;
+    uint32_t pasid, rid_pasid;
     int devfn = vtd_pasid_as->devfn;
     int ret = -1;
     struct vtd_as_key key = {
@@ -3256,6 +3287,11 @@ static int vtd_bind_guest_pasid(VTDPASIDAddressSpace *vtd_pasid_as,
     }
 
     idev = vtd_idev->idev;
+    pasid = vtd_pasid_as->pasid;
+    if (vtd_hpasid_find_by_guest(s, &pasid)) {
+        error_report("Invalid gpasid: %d!\n", vtd_pasid_as->pasid);
+        return -1;
+    }
 
     if (vtd_dev_get_rid2pasid(s, pci_bus_num(vtd_pasid_as->bus), devfn, &rid_pasid)) {
         error_report("Unable to get rid_pasid for devfn: %d!\n", devfn);
@@ -3267,11 +3303,19 @@ static int vtd_bind_guest_pasid(VTDPASIDAddressSpace *vtd_pasid_as,
     case VTD_PASID_BIND:
     {
         ret = vtd_device_attach_pgtbl(vtd_idev, pe, vtd_pasid_as, rid_pasid);
+        /* Bypass gpasid 0 */
+        if (!ret && vtd_pasid_as->pasid) {
+            ret = kvm_bind_pasid(current_cpu, vtd_pasid_as->pasid, pasid, 1);
+        }
         break;
     }
     case VTD_PASID_UNBIND:
     {
         ret = vtd_device_detach_pgtbl(idev, vtd_pasid_as, rid_pasid);
+        /* Bypass gpasid 0 */
+        if (!ret && vtd_pasid_as->pasid) {
+            ret = kvm_bind_pasid(current_cpu, vtd_pasid_as->pasid, pasid, 0);
+        }
         break;
     }
     default:
