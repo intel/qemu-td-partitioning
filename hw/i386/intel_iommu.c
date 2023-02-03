@@ -5276,6 +5276,16 @@ static int vtd_request_pasid_alloc(IntelIOMMUState *s, uint32_t *pasid)
     VTDPASIDStoreEntry *entry = NULL;
 
     vtd_iommu_lock(s);
+
+    entry = vtd_pasid_alloc_idx(s);
+    if (!entry) {
+        ret = -ENOSPC;
+        error_report("vtd_pasid_alloc_idx fail!\n");
+        goto out;
+    } else {
+        *pasid = entry->gpasid;
+    }
+
     ret = __vtd_alloc_host_pasid(s, !s->non_identical_pasid, pasid);
     if (ret) {
         goto out;
@@ -5286,13 +5296,10 @@ static int vtd_request_pasid_alloc(IntelIOMMUState *s, uint32_t *pasid)
         goto out;
     }
 
-    entry = vtd_pasid_alloc_idx(s);
     if (entry) {
         entry->hpasid = *pasid;
         *pasid = entry->gpasid;
         printf("Alloc PASID g/h: %u/%u\n", entry->gpasid, entry->hpasid);
-    } else {
-        ret = -ENOSPC;
     }
 out:
     vtd_iommu_unlock(s);
