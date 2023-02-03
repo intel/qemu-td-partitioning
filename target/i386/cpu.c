@@ -1079,7 +1079,7 @@ FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
             "la57", NULL, NULL, NULL,
             NULL, NULL, "rdpid", NULL,
             "bus-lock-detect", "cldemote", NULL, "movdiri",
-            "movdir64b", NULL, "sgxlc", "pks",
+            "movdir64b", "enqcmd", "sgxlc", "pks",
         },
         .cpuid = {
             .eax = 7,
@@ -1845,6 +1845,10 @@ ExtSaveArea x86_ext_save_areas[XSAVE_STATE_AREA_COUNT] = {
     [XSTATE_PKRU_BIT] =
           { .feature = FEAT_7_0_ECX, .bits = CPUID_7_0_ECX_PKU,
             .size = sizeof(XSavePKRU) },
+    [XSTATE_PASID_BIT] =
+          { .feature = FEAT_7_0_ECX, .bits = CPUID_7_0_ECX_ENQCMD,
+            .offset = 0,
+            .size = sizeof(XSavePASID) },
     [XSTATE_ARCH_LBR_BIT] = {
             .feature = FEAT_7_0_EDX, .bits = CPUID_7_0_EDX_ARCH_LBR,
             .offset = 0 /*supervisor mode component, offset = 0 */,
