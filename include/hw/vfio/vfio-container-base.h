@@ -145,6 +145,7 @@ struct VFIOIOMMUBackendOpsClass {
     int (*set_dirty_page_tracking)(VFIOContainer *container, bool start);
     int (*query_dirty_bitmap)(VFIOContainer *bcontainer, VFIOBitmap *vbmap,
                               hwaddr iova, hwaddr size);
+    bool (*get_dirty_pages_supported)(VFIODevice *vbasedev);
 
     /* SPAPR specific */
     int (*add_window)(VFIOContainer *container,

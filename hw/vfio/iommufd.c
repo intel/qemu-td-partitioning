@@ -568,6 +568,11 @@ out:
     g_free(vbasedev->name);
 }
 
+static bool iommufd_get_dirty_pages_supported(VFIODevice *vbasedev)
+{
+    return vbasedev->container->dirty_pages_supported;
+}
+
 static void vfio_iommu_backend_iommufd_ops_class_init(ObjectClass *oc,
                                                      void *data) {
     VFIOIOMMUBackendOpsClass *ops = VFIO_IOMMU_BACKEND_OPS_CLASS(oc);
@@ -579,6 +584,7 @@ static void vfio_iommu_backend_iommufd_ops_class_init(ObjectClass *oc,
     ops->detach_device = iommufd_detach_device;
     ops->set_dirty_page_tracking = iommufd_set_dirty_page_tracking;
     ops->query_dirty_bitmap = iommufd_query_dirty_bitmap;
+    ops->get_dirty_pages_supported = iommufd_get_dirty_pages_supported;
 }
 
 static int vfio_iommu_device_attach_hwpt(IOMMUFDDevice *idev,

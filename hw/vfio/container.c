@@ -1199,6 +1199,13 @@ static void vfio_legacy_detach_device(VFIODevice *vbasedev)
     vbasedev->container = NULL;
 }
 
+static bool legacy_get_dirty_pages_supported(VFIODevice *vbasedev)
+{
+    VFIOLegacyContainer *container = vbasedev->group->container;
+
+    return container->bcontainer.dirty_pages_supported;
+}
+
 static void vfio_iommu_backend_legacy_ops_class_init(ObjectClass *oc,
                                                      void *data) {
     VFIOIOMMUBackendOpsClass *ops = VFIO_IOMMU_BACKEND_OPS_CLASS(oc);
@@ -1212,6 +1219,7 @@ static void vfio_iommu_backend_legacy_ops_class_init(ObjectClass *oc,
     ops->del_window = vfio_legacy_del_section_window;
     ops->attach_device = vfio_legacy_attach_device;
     ops->detach_device = vfio_legacy_detach_device;
+    ops->get_dirty_pages_supported = legacy_get_dirty_pages_supported;
 }
 
 static const TypeInfo vfio_iommu_backend_legacy_ops_type = {

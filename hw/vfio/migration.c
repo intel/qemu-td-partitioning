@@ -873,8 +873,13 @@ void vfio_reset_bytes_transferred(void)
  */
 bool vfio_migration_realize(VFIODevice *vbasedev, Error **errp)
 {
+    bool dirty_pages_supported = false;
     Error *err = NULL;
     int ret;
+
+    if (!vbasedev->container->ops->get_dirty_pages_supported) {
+        goto add_blocker;
+    }
 
     if (vbasedev->enable_migration == ON_OFF_AUTO_OFF) {
         if (vbasedev->enable_dynamic_mmap) {
@@ -902,7 +907,8 @@ bool vfio_migration_realize(VFIODevice *vbasedev, Error **errp)
         return !vfio_block_migration(vbasedev, err, errp);
     }
 
-    if (!vbasedev->dirty_pages_supported) {
+    dirty_pages_supported = vbasedev->container->ops->get_dirty_pages_supported(vbasedev);
+    if (!vbasedev->dirty_pages_supported || !dirty_pages_supported) {
         if (vbasedev->enable_migration == ON_OFF_AUTO_AUTO) {
             error_setg(&err,
                        "%s: VFIO device doesn't support device dirty tracking",
