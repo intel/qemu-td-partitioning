@@ -528,6 +528,9 @@ static int kvm_mem_flags(MemoryRegion *mr)
     if (memory_region_can_be_private(mr)) {
         flags |= KVM_MEM_PRIVATE;
     }
+    if (memory_region_is_private_mmio(mr)) {
+        flags |= KVM_MEM_NONUPM_SAFE;
+    }
     return flags;
 }
 
@@ -3085,7 +3088,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
         return ret;
     }
 
-    if (memory_region_can_be_private(section.mr)) {
+    if (memory_region_can_be_private(section.mr) || memory_region_is_private_mmio(section.mr)) {
         if (to_private) {
             ret = kvm_set_memory_attributes_private(start, size);
         } else {
@@ -3100,12 +3103,17 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
                section.offset_within_region;
         rb = qemu_ram_block_from_host(addr, false, &offset);
         memory_region_convert_mem_attr(&section, !to_private);
-        /*
-         * With KVM_SET_MEMORY_ATTRIBUTES by kvm_set_memory_attributes(),
-         * operation on underlying file descriptor is only for releasing
-         * unnecessary pages.
-         */
-        ram_block_convert_range(rb, offset, size, to_private);
+
+        if (memory_region_is_private_mmio(section.mr)) {
+            ret = 0;
+        } else {
+            /*
+            * With KVM_SET_MEMORY_ATTRIBUTES by kvm_set_memory_attributes(),
+            * operation on underlying file descriptor is only for releasing
+            * unnecessary pages.
+            */
+            ram_block_convert_range(rb, offset, size, to_private);
+        }
     } else {
         MemoryRegion *mr = section.mr;
 

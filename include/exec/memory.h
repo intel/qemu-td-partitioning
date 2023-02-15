@@ -799,6 +799,7 @@ struct MemoryRegion {
     uint64_t align;
     bool terminates;
     bool ram_device;
+    bool private_mmio;
     bool enabled;
     bool warning_printed; /* For reservations */
     uint8_t vga_logging_count;
@@ -1731,6 +1732,28 @@ static inline bool memory_region_is_ram(MemoryRegion *mr)
  * @mr: the memory region being queried
  */
 bool memory_region_is_ram_device(MemoryRegion *mr);
+
+
+/**
+ * memory_region_is_private_mmio: check whether a memory region is a private mmio
+ * region and backed by a physical device, i.e. MMIO BAR of an vfio-pci assigned
+ * private device.
+ *
+ * Returns %true if a ram region is a device backed private mmio ram region
+ *
+ * @mr: the memory region being queried
+ */
+bool memory_region_is_private_mmio(MemoryRegion *mr);
+
+/**
+ * memory_region_set_private_mmio: Set private_mmio flag
+ *
+ * Mark a memory region as private mmio region and backed by a physical device
+ *
+ * @mr: the region being updated.
+ * @private: whether the region is private mmio region backed by a physical device
+ */
+void memory_region_set_private_mmio(MemoryRegion *mr, bool private_mmio);
 
 /**
  * memory_region_is_romd: check whether a memory region is in ROMD mode

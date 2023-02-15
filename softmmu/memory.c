@@ -1871,6 +1871,21 @@ bool memory_region_is_ram_device(MemoryRegion *mr)
     return mr->ram_device;
 }
 
+bool memory_region_is_private_mmio(MemoryRegion *mr)
+{
+    return mr->private_mmio;
+}
+
+void memory_region_set_private_mmio(MemoryRegion *mr, bool private_mmio)
+{
+    if (mr->private_mmio != private_mmio) {
+        memory_region_transaction_begin();
+        mr->private_mmio = private_mmio;
+        memory_region_update_pending |= mr->enabled;
+        memory_region_transaction_commit();
+    }
+}
+
 bool memory_region_is_protected(MemoryRegion *mr)
 {
     return mr->ram && (mr->ram_block->flags & RAM_PROTECTED);
