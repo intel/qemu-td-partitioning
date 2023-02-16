@@ -956,6 +956,7 @@ void pc_memory_init(PCMachineState *pcms,
     int linux_boot, i;
     MemoryRegion *option_rom_mr;
     MemoryRegion *ram_below_4g, *ram_above_4g;
+    MemoryRegion *bios;
     FWCfgState *fw_cfg;
     MachineState *machine = MACHINE(pcms);
     MachineClass *mc = MACHINE_GET_CLASS(machine);
@@ -1012,6 +1013,14 @@ void pc_memory_init(PCMachineState *pcms,
     memory_region_init_alias(ram_below_4g, NULL, "ram-below-4g", machine->ram,
                              0, x86ms->below_4g_mem_size);
     memory_region_add_subregion(system_memory, 0, ram_below_4g);
+
+    if (kvm_vm_type == KVM_X86_TD_PART_VM) {
+        bios = g_malloc(sizeof(*bios));
+        memory_region_init_alias(bios, NULL, "pc.bios", machine->ram,
+                                 4 * GiB - 2 * MiB, 2 * MiB);
+        /* TODO make the code region read-only */
+        memory_region_add_subregion(system_memory, 4 * GiB - 2 * MiB, bios);
+    }
 
     e820_add_entry(0, x86ms->below_4g_mem_size, E820_RAM);
     if (x86ms->above_4g_mem_size > 0) {
