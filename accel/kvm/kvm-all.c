@@ -3474,8 +3474,8 @@ int kvm_vcpu_ioctl(CPUState *cpu, int type, ...)
     /* Fail if we more than 1 bit is set as we have affinitized each vCPU to one
      * physical core. */
     if (CPU_COUNT(&vcpu_cpuset) != 1) {
-	DPRINTF("%s failed: vcpu affinitized to more than 1 CPU\n", __func__);
-	return -EINVAL;
+        DPRINTF("%s failed: vcpu affinitized to more than 1 CPU\n", __func__);
+        return -EINVAL;
     }
 
     self = pthread_self();
@@ -3486,12 +3486,12 @@ int kvm_vcpu_ioctl(CPUState *cpu, int type, ...)
              __func__, type, gettid(), affinity, self_affinity);*/
 
     if (!CPU_EQUAL(&vcpu_cpuset, &self_cpuset)) {
-	CPU_ZERO(&cpuset);
-	CPU_OR(&cpuset, &vcpu_cpuset, &cpuset);
-	pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset);
+        CPU_ZERO(&cpuset);
+        CPU_OR(&cpuset, &vcpu_cpuset, &cpuset);
+        pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset);
         /* Give up cpu */
         //sleep(0);
-        __asm volatile ("pause" ::: "memory"); 
+        __asm volatile ("pause" ::: "memory");
     }
 
     trace_kvm_vcpu_ioctl(cpu->cpu_index, type, arg);
@@ -3504,9 +3504,9 @@ int kvm_vcpu_ioctl(CPUState *cpu, int type, ...)
 
     /* Reset affinity */
     if (!CPU_EQUAL(&vcpu_cpuset, &self_cpuset)) {
-	CPU_ZERO(&cpuset);
-	CPU_OR(&cpuset, &self_cpuset, &cpuset);
-	pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset);
+        CPU_ZERO(&cpuset);
+        CPU_OR(&cpuset, &self_cpuset, &cpuset);
+        pthread_setaffinity_np(self, sizeof(cpu_set_t), &cpuset);
     }
 
     return ret;

@@ -3608,7 +3608,12 @@ void qemu_init(int argc, char **argv)
     qemu_apply_legacy_machine_options(machine_opts_dict);
     qemu_apply_machine_options(machine_opts_dict);
     qobject_unref(machine_opts_dict);
-    parse_vcpu_opts(current_machine);
+
+    if (parse_vcpu_opts(current_machine) < 0) {
+        error_report("-vcpu affinity option not set for all vcpus!");
+        exit(1);
+    }
+
     phase_advance(PHASE_MACHINE_CREATED);
 
     /*

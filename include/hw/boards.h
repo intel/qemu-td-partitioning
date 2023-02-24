@@ -38,7 +38,7 @@ void machine_parse_smp_config(MachineState *ms,
 unsigned int machine_topo_get_cores_per_socket(const MachineState *ms);
 unsigned int machine_topo_get_threads_per_socket(const MachineState *ms);
 void machine_memory_devices_init(MachineState *ms, hwaddr base, uint64_t size);
-void parse_vcpu_opts(MachineState *ms);
+int parse_vcpu_opts(MachineState *ms);
 
 /**
  * machine_class_allow_dynamic_sysbus_dev: Add type to list of valid devices
