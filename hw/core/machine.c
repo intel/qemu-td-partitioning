@@ -40,6 +40,8 @@
 #include "hw/virtio/virtio-pci.h"
 #include "qom/object_interfaces.h"
 
+static int vcpu_affinity_cnt;
+
 GlobalProperty hw_compat_7_1[] = {
     { "virtio-device", "queue_reset", "false" },
 };
@@ -923,6 +925,7 @@ static int vcpu_parse(void *opaque, QemuOpts *opts, Error **errp)
         if (vcpu < ms->smp.max_cpus) {
             if (mc->vcpu_affinity[vcpu] == -1) {
                 mc->vcpu_affinity[vcpu] = affinity;
+                vcpu_affinity_cnt++;
             }
             else {
                 error_setg(errp, "Duplicate affinity statement for vcpu %d", vcpu);
@@ -938,9 +941,18 @@ static int vcpu_parse(void *opaque, QemuOpts *opts, Error **errp)
     return 0;
 }
 
-void parse_vcpu_opts(MachineState *ms)
+int parse_vcpu_opts(MachineState *ms)
 {
-    qemu_opts_foreach(qemu_find_opts("vcpu-opts"), vcpu_parse, ms, &error_fatal);
+    QemuOptsList *list = qemu_find_opts("vcpu-opts");
+    QemuOpts *opts = (&list->head)->tqh_first;
+    if (!opts) {
+        return -1;
+    }
+    qemu_opts_foreach(list, vcpu_parse, ms, &error_fatal);
+    if (ms->smp.cpus != vcpu_affinity_cnt) {
+        return -1;
+    }
+    return 0;
 }
 
 static void machine_class_init(ObjectClass *oc, void *data)
