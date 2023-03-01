@@ -1176,6 +1176,10 @@ void qemu_savevm_state_setup(QEMUFile *f)
         return;
     }
 
+    if (cgs_mig_savevm_state_start(f)) {
+        return;
+    }
+
     QTAILQ_FOREACH(se, &savevm_state.handlers, entry) {
         if (!se->ops || !se->ops->save_setup) {
             continue;
