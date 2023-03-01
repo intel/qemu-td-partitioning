@@ -442,6 +442,24 @@ static void tdx_mig_cleanup(void)
     tdx_mig.streams = NULL;
 }
 
+static int tdx_mig_savevm_state_ram_cancel(hwaddr gfn_end)
+{
+    TdxMigStream *stream = &tdx_mig.streams[0];
+    int ret;
+
+    /* No page has been exported yet. */
+    if (!gfn_end) {
+        return 0;
+    }
+
+    ret = tdx_mig_stream_ioctl(stream, KVM_TDX_MIG_EXPORT_ABORT, 0, &gfn_end);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
 void tdx_mig_init(CgsMig *cgs_mig)
 {
     cgs_mig->is_ready = tdx_mig_is_ready;
@@ -453,6 +471,7 @@ void tdx_mig_init(CgsMig *cgs_mig)
     cgs_mig->savevm_state_downtime = tdx_mig_savevm_state_downtime;
     cgs_mig->savevm_state_end = tdx_mig_savevm_state_end;
     cgs_mig->savevm_state_cleanup = tdx_mig_cleanup;
+    cgs_mig->savevm_state_ram_cancel = tdx_mig_savevm_state_ram_cancel;
     cgs_mig->loadvm_state_setup = tdx_mig_stream_setup;
     cgs_mig->loadvm_state_cleanup = tdx_mig_cleanup;
 }
