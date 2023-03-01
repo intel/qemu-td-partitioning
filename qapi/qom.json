@@ -881,6 +881,8 @@
 #
 # @migtd-pid: process id of a migtd to bind
 #
+# @migtd-hash: SHA384 hex string of a migtd to prebind
+#
 # Since: 7.3
 ##
 { 'struct': 'TdxGuestProperties',
@@ -891,7 +893,8 @@
             '*mrownerconfig': 'str',
             '*quote-generation-service': 'str',
             '*migtd-attr': 'uint64',
-            '*migtd-pid': 'uint32' } }
+            '*migtd-pid': 'uint32',
+            '*migtd-hash': 'str' } }
 
 ##
 # @ThreadContextProperties:
