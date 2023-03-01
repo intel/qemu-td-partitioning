@@ -883,6 +883,8 @@
 #
 # @migtd-hash: SHA384 hex string of a migtd to prebind
 #
+# @vsockport: vsock port for a migtd to connect
+#
 # Since: 7.3
 ##
 { 'struct': 'TdxGuestProperties',
@@ -894,7 +896,8 @@
             '*quote-generation-service': 'str',
             '*migtd-attr': 'uint64',
             '*migtd-pid': 'uint32',
-            '*migtd-hash': 'str' } }
+            '*migtd-hash': 'str',
+            '*vsockport': 'uint32' } }
 
 ##
 # @ThreadContextProperties:
