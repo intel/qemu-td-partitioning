@@ -22,7 +22,9 @@
 #include "qemu/error-report.h"
 #include "qemu/main-loop.h"
 #include "qemu/qemu-print.h"
+#include "qemu/units.h"
 #include "qom/object.h"
+#include "hw/i386/x86.h"
 #include "trace.h"
 
 #include <linux/kvm.h>
@@ -1630,6 +1632,142 @@ void memory_region_init_resizeable_ram(MemoryRegion *mr,
     memory_region_init_ram_debug_ops(mr);
 }
 
+static uint64_t memparse(const char *ptr, char **retptr)
+{
+    char *endptr;   /* local pointer to end of parsed string */
+    uint64_t ret = strtoull(ptr, &endptr, 0);
+
+    switch (*endptr) {
+    case 'G':
+    case 'g':
+        ret <<= 10;
+        /* fallthrough */
+    case 'M':
+    case 'm':
+        ret <<= 10;
+        /* fallthrough */
+    case 'K':
+    case 'k':
+        ret <<= 10;
+        endptr++;
+        /* fallthrough */
+    default:
+        break;
+    }
+
+    if (retptr)
+        *retptr = endptr;
+
+    return ret;
+}
+
+static int parse_memmap(char *p, uint64_t *start, uint64_t *size)
+{
+    char *oldp;
+
+    if (!p)
+        return -1;
+
+    /* We don't care about this option here */
+    if (!strncmp(p, "exactmap", 8))
+        return -1;
+
+    oldp = p;
+    //TODO: Check for failure from strtoull
+    *size = memparse(p, &p);
+    if (p == oldp)
+        return -1;
+
+    switch (*p) {
+    case '$':
+        //TODO: Check for failure from strtoull
+        *start = memparse(p + 1, &p);
+        break;
+    case '@':
+    case '#':
+    case '!':
+    default:
+        /* Not supported */
+        *size = 0;
+        *start = 0;
+        return -1;
+    }
+
+    return 0;
+}
+
+#define MAX_MEMMAP_REGIONS  4
+struct memmap_info {
+    uint64_t start;
+    uint64_t size;
+};
+static struct memmap_info mem_avail[MAX_MEMMAP_REGIONS];
+
+static int get_memmap_from_commandline(const char *name)
+{
+    char line[1024];
+    char *start;
+    char *chr;
+    int i = 0, ret;
+    uint64_t begin, size;
+
+    FILE *fp = fopen("/proc/cmdline", "r");
+    if (fp == NULL) {
+        fprintf(stderr, "ERROR: cannot open /proc/cmdline\n");
+        return -1;
+    }
+
+    if (!fgets(line, sizeof line, fp)) {
+        fprintf(stderr, "ERROR: cannot read /proc/cmdline\n");
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    start = strstr(line, name);
+    while (start != NULL && i < MAX_MEMMAP_REGIONS) {
+        start += strlen(name);
+        if (*start != '=') {
+            fprintf(stderr, "ERROR: no value provided for '%s' in /proc/cmdline\n"
+                             , name);
+            return -1;
+        }
+        start++;
+
+        ret = parse_memmap(start, &begin,  &size);
+        if (ret < 0)
+            return -1;
+
+        mem_avail[i].start = begin;
+        mem_avail[i].size = size;
+        i++;
+
+        /* Check if comma seperated */
+        chr = strchr(start, ',');
+        if (chr) {
+            *chr++ = 0;
+            start = chr;
+            ret = parse_memmap(start, &begin,  &size);
+            if (ret < 0)
+                return -1;
+
+            mem_avail[i].start = begin;
+            mem_avail[i].size = size;
+            i++;
+        }
+
+        start = strstr(start, name);
+    }
+
+    if (i == 0 || i > 3) {
+        fprintf(stderr, "Check memmap options! Current version only supports 2"
+                        " memmap regions\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 #ifdef CONFIG_POSIX
 void memory_region_init_ram_from_file(MemoryRegion *mr,
                                       Object *owner,
@@ -1643,6 +1781,47 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
                                       Error **errp)
 {
     Error *err = NULL;
+    X86MachineState *x86ms = X86_MACHINE(current_machine);
+    if (kvm_vm_type == KVM_X86_TD_PART_VM) {
+        int ret = get_memmap_from_commandline("memmap");
+        if (ret < 0) {
+            exit(1);
+        }
+
+        int cnt_below_4g = 0, cnt_above_4g = 0;
+        uint64_t ram_size;
+        uint64_t total_memmap_size = 0;
+        /* Currently we only support 2 memmap regions */
+        for (int i = 0; i < 2; i++) {
+            if (mem_avail[i].start < 4 * GiB &&
+                mem_avail[i].start + mem_avail[i].size < 4 * GiB) {
+                cnt_below_4g++;
+            } else {
+                cnt_above_4g++;
+                x86ms->above_4g_mem_start = mem_avail[i].start;
+                ram_size = size;
+                size = mem_avail[i].start + mem_avail[i].size;
+            }
+
+            /* Allow identity mapping for the first 1MB */
+            if (mem_avail[i].start  == 1 * MiB)
+                mem_avail[i].size += (1 * MiB);
+
+            total_memmap_size += mem_avail[i].size;
+        }
+
+        if (cnt_below_4g > 1 || cnt_above_4g > 1) {
+            fprintf(stderr, "At most 1 memmap region below 4G and one above 4G"
+                            " is supported\n");
+            exit(1);
+        }
+
+        if (ram_size != total_memmap_size) {
+            fprintf(stderr, "memmap size doesn't match with file backend!\n");
+            exit(1);
+        }
+    }
+
     memory_region_init(mr, owner, name, size);
     mr->ram = true;
     mr->readonly = readonly;
