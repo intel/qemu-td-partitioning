@@ -922,8 +922,8 @@ static bool tdx_guest_need_prebinding(void)
      * migtd_hash by default is 0 which is deemed as invalid.
      * Pre-binding happens when user provided a non-0 hash value.
      */
-    for (i = 0; i < KVM_TDX_SERVTD_HASH_SIZE / sizeof(uint64_t); i++) {
-        if (qword != 0)
+    for (i = 0; i < KVM_TDX_SERVTD_HASH_SIZE / sizeof(uint64_t); i++, qword++) {
+        if (*qword != 0)
             return true;
     }
 
