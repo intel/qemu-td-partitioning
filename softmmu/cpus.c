@@ -650,13 +650,12 @@ void qemu_init_vcpu(CPUState *cpu)
     g_assert(cpus_accel != NULL && cpus_accel->create_vcpu_thread != NULL);
     cpus_accel->create_vcpu_thread(cpu);
 
-    if (affinity != -1) {
-        CPU_ZERO(&cpuset);
-        CPU_SET(affinity, &cpuset);
-        qemu_log("%s: vcpu = %d, affinitized to physical core = %d\n", __func__, cpu->cpu_index,
-                 affinity);
-        pthread_setaffinity_np((cpu->thread)->thread, sizeof(cpu_set_t), &cpuset);
-    }
+    affinity = (affinity == -1) ? cpu->cpu_index : affinity;
+    CPU_ZERO(&cpuset);
+    CPU_SET(affinity, &cpuset);
+    qemu_log("%s: vcpu = %d, affinitized to physical core = %d\n", __func__, cpu->cpu_index,
+             affinity);
+    pthread_setaffinity_np((cpu->thread)->thread, sizeof(cpu_set_t), &cpuset);
 
     while (!cpu->created) {
         qemu_cond_wait(&qemu_cpu_cond, &qemu_global_mutex);
