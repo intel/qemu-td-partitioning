@@ -1102,6 +1102,13 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
         get_tdx_capabilities();
     }
 
+    /* Sanity check. The num_l2_vms should not exceed the max_num_l2_vms */
+    if (tdx->num_l2_vms > tdx_caps->max_num_l2_vms) {
+        error_setg(errp, "TDX VM doesn't support %d L2 VMs, maximum %d",
+                   tdx->num_l2_vms, tdx_caps->max_num_l2_vms);
+        return -EINVAL;
+    }
+
     update_tdx_cpuid_lookup_by_tdx_caps();
 
     /*
@@ -1211,6 +1218,7 @@ int tdx_pre_create_vcpu(CPUState *cpu)
     init_vm.cpuid.nent = kvm_x86_arch_cpuid(env, init_vm.entries, 0);
 
     init_vm.attributes = tdx_guest->attributes;
+    init_vm.num_l2_vms = tdx_guest->num_l2_vms;
 
     QEMU_BUILD_BUG_ON(sizeof(init_vm.mrconfigid) != sizeof(tdx_guest->mrconfigid));
     QEMU_BUILD_BUG_ON(sizeof(init_vm.mrowner) != sizeof(tdx_guest->mrowner));
@@ -1424,6 +1432,9 @@ static void tdx_guest_init(Object *obj)
     tdx->event_notify_interrupt = -1;
     tdx->apic_id = -1;
     tdx->migtd_attr = TDX_MIGTD_ATTR_DEFAULT;
+
+    object_property_add_uint8_ptr(obj, "num-l2-vms", &tdx->num_l2_vms,
+                                  OBJ_PROP_FLAG_READWRITE);
 }
 
 static void tdx_guest_finalize(Object *obj)
