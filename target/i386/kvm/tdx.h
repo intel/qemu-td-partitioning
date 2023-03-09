@@ -89,6 +89,9 @@ typedef struct TdxVmcallService {
     TdxVmcallServiceType *dispatch_table;
     int dispatch_table_count;
 
+    char *vtpm_type;
+    char *vtpm_path;
+    char *vtpm_userid;
 } TdxVmcallService;
 
 
@@ -158,4 +161,5 @@ void tdx_vmcall_service_item_unref(TdxVmcallServiceItem *vsi);
 
 void tdx_vmcall_service_register_type(TdxGuest *tdx,
                                       TdxVmcallServiceType* type);
+
 #endif /* QEMU_I386_TDX_H */
