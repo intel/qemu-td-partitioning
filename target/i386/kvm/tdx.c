@@ -1031,6 +1031,7 @@ static void tdx_post_init_vcpus(void)
     }
 }
 
+static void tdx_guest_init_vmcall_service_vtpm(TdxGuest *tdx);
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
     TdxFirmware *tdvf = &tdx_guest->tdvf;
@@ -1104,6 +1105,8 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
         error_report("KVM_TDX_FINALIZE_VM failed %s", strerror(-r));
         exit(0);
     }
+
+    tdx_guest_init_vmcall_service_vtpm(tdx_guest);
     tdx_guest->parent_obj.ready = true;
 }
 
@@ -1371,6 +1374,24 @@ OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    CONFIDENTIAL_GUEST_SUPPORT,
                                    { TYPE_USER_CREATABLE },
                                    { NULL })
+
+static void tdx_guest_init_vmcall_service_vtpm(TdxGuest *tdx)
+{
+    TdxVmcallService *vms = &tdx->vmcall_service;
+
+    if (!vms->vtpm_type)
+        return;
+
+    if (!vms->vtpm_path)
+        return;
+
+    if (!g_strcmp0(vms->vtpm_type, "client") &&
+        !vms->vtpm_userid) {
+        return;
+    }
+
+    tdx_guest_init_vtpm(tdx);
+}
 
 static void tdx_guest_set_vtpm_type(Object *obj, const char *val, Error **err)
 {
