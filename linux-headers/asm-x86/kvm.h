@@ -608,12 +608,15 @@ struct kvm_tdx_capabilities {
 	__u64 xfam_fixed1;
 
 	__u32 nr_cpuid_configs;
-	__u32 padding;
+	__u8  max_num_l2_vms;
+	__u8  padding[3];
 	struct kvm_tdx_cpuid_config cpuid_configs[0];
 };
 
 struct kvm_tdx_init_vm {
 	__u64 attributes;
+	__u8  num_l2_vms;
+	__u8  padding[7];
 	__u64 mrconfigid[6];	/* sha384 digest */
 	__u64 mrowner[6];	/* sha384 digest */
 	__u64 mrownerconfig[6];	/* sha348 digest */
@@ -638,7 +641,7 @@ struct kvm_tdx_init_vm {
 		 * The size(struct kvm_tdx_init_vm) = 16KB.
 		 * This should be enough given sizeof(TD_PARAMS) = 1024
 		 */
-		__u64 reserved[2029];
+		__u64 reserved[2028];
 	};
 };
 
