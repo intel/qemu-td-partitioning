@@ -1943,6 +1943,13 @@ uint32_t kvm_x86_arch_cpuid(CPUX86State *env, struct kvm_cpuid_entry2 *entries,
             }
             break;
         }
+        case 0x15:
+            if (tdp_enlightenment) {
+                c->function = i;
+                c->flags = 0;
+                host_cpuid(0x15, 0, &c->eax, &c->ebx, &c->ecx, &c->edx);
+            }
+            break;
         case 0x21:
             if (tdp_enlightenment) {
                 uint32_t signature[3];
