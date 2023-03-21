@@ -762,6 +762,12 @@ void tdx_set_tdvf_region(MemoryRegion *tdvf_region)
     tdx_guest->tdvf_region = tdvf_region;
 }
 
+void tdx_set_bios2_region(MemoryRegion *bios2_region)
+{
+    assert(!tdx_guest->bios2_region);
+    tdx_guest->bios2_region = bios2_region;
+}
+
 static TdxFirmwareEntry *tdx_get_hob_entry(TdxGuest *tdx)
 {
     TdxFirmwareEntry *entry;
@@ -1063,6 +1069,30 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
     /* Tdvf image was copied into private region above. It becomes unnecessary. */
     ram_block = tdx_guest->tdvf_region->ram_block;
     ram_block_discard_range(ram_block, 0, ram_block->max_length);
+
+    if (tdx_guest->bios2_region) {
+        struct kvm_tdx_init_mem_region mem_region = {
+            .source_addr = (__u64)memory_region_get_ram_ptr(tdx_guest->bios2_region),
+            .gpa = (__u64)((uint32_t)-tdx_guest->bios2_region->size),
+            .nr_pages = tdx_guest->bios2_region->size / 4096,
+        };
+
+        r = kvm_encrypt_reg_region((__u64)((uint32_t)-tdx_guest->bios2_region->size),
+                                   tdx_guest->bios2_region->size, true);
+        if (r < 0) {
+             error_report("Reserve initial private memory failed %s", strerror(-r));
+             exit(1);
+        }
+
+        r = tdx_vm_ioctl(KVM_TDX_INIT_MEM_REGION, 0, &mem_region);
+        if (r < 0) {
+             error_report("KVM_TDX_INIT_MEM_REGION failed %s", strerror(-r));
+             exit(1);
+        }
+
+        ram_block = tdx_guest->bios2_region->ram_block;
+        ram_block_discard_range(ram_block, 0, ram_block->max_length);
+    }
 
     r = tdx_vm_ioctl(KVM_TDX_FINALIZE_VM, 0, NULL);
     if (r < 0) {
