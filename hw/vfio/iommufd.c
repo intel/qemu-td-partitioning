@@ -340,11 +340,15 @@ static int iommufd_attach_device(char *name, VFIODevice *vbasedev,
     Error *err = NULL;
     bool new_container = true;
 
-    devfd = vfio_get_devicefd(vbasedev->sysfsdev, errp);
-    if (devfd < 0) {
-        return devfd;
+    if (vbasedev->fd < 0) {
+        devfd = vfio_get_devicefd(vbasedev->sysfsdev, errp);
+        if (devfd < 0) {
+            return devfd;
+        }
+        vbasedev->fd = devfd;
+    } else {
+        devfd = vbasedev->fd;
     }
-    vbasedev->fd = devfd;
 
     space = vfio_get_address_space(as);
 
