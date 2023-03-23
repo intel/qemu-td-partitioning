@@ -6721,8 +6721,7 @@ VTDAddressSpace *vtd_find_add_as(IntelIOMMUState *s, PCIBus *bus,
 static bool vtd_check_hw_info(IntelIOMMUState *s,
                                    struct iommu_hw_info_vtd *vtd)
 {
-    return !((s->aw_bits > ((vtd->cap_reg >> 16) & 0x3fULL)) ||
-             ((s->host_cap ^ vtd->cap_reg) & VTD_CAP_MASK & s->host_cap) ||
+    return !(((s->host_cap ^ vtd->cap_reg) & VTD_CAP_MASK & s->host_cap) ||
              ((s->host_ecap ^ vtd->ecap_reg) & VTD_ECAP_MASK & s->host_ecap) ||
              (VTD_GET_PSS(s->host_ecap) > VTD_GET_PSS(vtd->ecap_reg)));
 }
@@ -6733,22 +6732,22 @@ static bool vtd_sync_hw_info(IntelIOMMUState *s,
 {
     uint64_t cap, ecap, addr_width, pasid_bits;
 
+    addr_width = (vtd->cap_reg >> 16) & 0x3fULL;
+    if (s->aw_bits != addr_width) {
+        error_report("User aw-bits: %u != host address width: %lu",
+                      s->aw_bits, addr_width);
+        return false;
+    }
+
     if (s->cap_finalized) {
         return vtd_check_hw_info(s, vtd);
     }
 
-    if (!s->scalable_modern) {
-        addr_width = (vtd->cap_reg >> 16) & 0x3fULL;
-        if (s->aw_bits > addr_width) {
-            error_report("User aw-bits: %u > host address width: %lu",
-                         s->aw_bits, addr_width);
-            return false;
-        }
-    } else {
-        cap = s->host_cap & vtd->cap_reg & VTD_CAP_MASK;
-        s->host_cap &= ~VTD_CAP_MASK;
-        s->host_cap |= cap;
+    cap = s->host_cap & vtd->cap_reg & VTD_CAP_MASK;
+    s->host_cap &= ~VTD_CAP_MASK;
+    s->host_cap |= cap;
 
+    if (!s->scalable_modern) {
         pasid_bits = VTD_GET_PSS(vtd->ecap_reg);
         if ((VTD_ECAP_PASID & s->host_ecap & vtd->ecap_reg) && pasid_bits &&
             (VTD_GET_PSS(s->host_ecap) > pasid_bits)) {
@@ -6998,6 +6997,41 @@ static void vtd_iommu_replay(IOMMUMemoryRegion *iommu_mr, IOMMUNotifier *n)
     return;
 }
 
+static void get_supported_aw(IntelIOMMUState *s)
+{
+    static char cmdline[1024];
+    uint64_t feat;
+    FILE *fp;
+
+    feat = x86_cpu_get_supported_feature_word(FEAT_7_0_ECX, false);
+    if (feat & CPUID_7_0_ECX_LA57) {
+        s->aw_bits = VTD_HOST_AW_57BIT;
+    } else {
+        uint32_t eax, ebx, ecx, edx;
+
+        host_cpuid(0x80000008, 0, &eax, &ebx, &ecx, &edx);
+        s->aw_bits = (eax >> 8) & 0xff;
+    }
+
+    fp = fopen("/proc/cmdline", "r");
+    if (!fp) {
+        return;
+    }
+
+    if (!fgets(cmdline, sizeof(cmdline), fp)) {
+        fclose(fp);
+        return;
+    }
+    fclose(fp);
+
+    if (strstr(cmdline, "no5lvl") && s->aw_bits == VTD_HOST_AW_57BIT) {
+        s->aw_bits = VTD_HOST_AW_48BIT;
+        printf("iommu: Detected no5lvl, fallback to 48bit aw-bits!\n");
+    }
+
+    return;
+}
+
 static void vtd_cap_init(IntelIOMMUState *s)
 {
     X86IOMMUState *x86_iommu = X86_IOMMU_DEVICE(s);
@@ -7008,13 +7042,19 @@ static void vtd_cap_init(IntelIOMMUState *s)
     if (s->dma_drain) {
         s->cap |= VTD_CAP_DRAIN;
     }
+
+    get_supported_aw(s);
+
     if (s->dma_translation) {
-            if (s->aw_bits >= VTD_HOST_AW_39BIT) {
-                    s->cap |= VTD_CAP_SAGAW_39bit;
-            }
-            if (s->aw_bits >= VTD_HOST_AW_48BIT) {
-                    s->cap |= VTD_CAP_SAGAW_48bit;
-            }
+        if (s->aw_bits >= VTD_HOST_AW_39BIT) {
+            s->cap |= VTD_CAP_SAGAW_39bit;
+        }
+        if (s->aw_bits >= VTD_HOST_AW_48BIT) {
+            s->cap |= VTD_CAP_SAGAW_48bit;
+        }
+        if (s->aw_bits >= VTD_HOST_AW_57BIT) {
+            s->cap |= VTD_CAP_SAGAW_57bit;
+        }
     }
     s->ecap = VTD_ECAP_QI | VTD_ECAP_IRO;
 
@@ -7049,9 +7089,12 @@ static void vtd_cap_init(IntelIOMMUState *s)
         s->ecap |= VTD_ECAP_SMTS | VTD_ECAP_SRS |
                    VTD_ECAP_PSS(VTD_PASID_SS) | VTD_ECAP_VCS  |
                    VTD_ECAP_EAFS;
-        if (s->aw_bits == VTD_HOST_AW_48BIT) {
+        if (s->aw_bits >= VTD_HOST_AW_48BIT) {
             s->ecap |= VTD_ECAP_FLTS;
             s->cap |= VTD_CAP_FL1GP;
+        }
+        if (s->aw_bits >= VTD_HOST_AW_57BIT) {
+            s->cap |= VTD_CAP_FL5LP;
         }
         s->vccap |= VTD_VCCAP_PAS;
     }
