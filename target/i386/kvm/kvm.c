@@ -164,6 +164,8 @@ static const char* vm_type_name[] = {
     [KVM_X86_TD_PART_VM] = "td-part",
 };
 
+static bool tdp_enlightenment;
+
 int kvm_get_vm_type(MachineState *ms, const char *vm_type)
 {
     X86MachineState *x86ms = X86_MACHINE(ms);
@@ -176,7 +178,8 @@ int kvm_get_vm_type(MachineState *ms, const char *vm_type)
             kvm_type = KVM_X86_SW_PROTECTED_VM;
         } else if (!g_ascii_strcasecmp(vm_type, "tdx")) {
             kvm_type = KVM_X86_TDX_VM;
-	} else if (!g_ascii_strcasecmp(vm_type, "td-part")) {
+	} else if (!g_ascii_strcasecmp(vm_type, "td-part") ||
+			!g_ascii_strcasecmp(vm_type, "td-part-enlighten")) {
 	    kvm_type = KVM_X86_TD_PART_VM;
         }else {
             error_report("Unknown kvm-type specified '%s'", vm_type);
@@ -1940,6 +1943,19 @@ uint32_t kvm_x86_arch_cpuid(CPUX86State *env, struct kvm_cpuid_entry2 *entries,
             }
             break;
         }
+        case 0x21:
+            if (tdp_enlightenment) {
+                uint32_t signature[3];
+                memcpy(signature, "IntelTDP    ", 12);
+                c->function = i;
+                c->flags = 0;
+                c->eax = 0;
+                c->ebx = signature[0];
+                c->ecx = signature[2];
+                c->edx = signature[1];
+                break;
+	    }
+            /* fallthrough */
         default:
             c->function = i;
             c->flags = 0;
@@ -2220,6 +2236,14 @@ int kvm_arch_init_vcpu(CPUState *cs)
             abort();
         }
     }
+
+    if (tdp_enlightenment && (env->cpuid_level < 0x21))
+        /* Reconfigure the limit at least 0x21 if VM is tdp enlightened
+	 * as CPUID 0x21 will provide the TDP signature for guest OS to
+	 * use the englitenment. This has to be done before calling
+	 * kvm_x86_arch_cpuid().
+	 */
+	env->cpuid_level = 0x21;
 
     cpuid_i = kvm_x86_arch_cpuid(env, cpuid_data.entries, cpuid_i);
     cpuid_data.cpuid.nent = cpuid_i;
@@ -2855,6 +2879,9 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
             ratelimit_set_speed(&bus_lock_ratelimit_ctrl,
                                 x86ms->bus_lock_ratelimit, BUS_LOCK_SLICE_TIME);
         }
+
+	if (x86ms->kvm_type && !strcmp(x86ms->kvm_type, "td-part-enlighten"))
+            tdp_enlightenment = true;
     }
 
     if (s->notify_vmexit != NOTIFY_VMEXIT_OPTION_DISABLE &&
