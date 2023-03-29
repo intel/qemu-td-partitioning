@@ -313,6 +313,88 @@ static int tdx_event_handle(struct TdxEvent *event)
     return ret;
 }
 
+struct x86_msi {
+    union {
+        struct {
+            uint32_t    reserved_0              : 2,
+                        dest_mode_logical       : 1,
+                        redirect_hint           : 1,
+                        reserved_1              : 1,
+                        virt_destid_8_14        : 7,
+                        destid_0_7              : 8,
+                        base_address            : 12;
+        } QEMU_PACKED x86_address_lo;
+        uint32_t address_lo;
+    };
+    union {
+        struct {
+            uint32_t    reserved        : 8,
+                        destid_8_31     : 24;
+        } QEMU_PACKED x86_address_hi;
+        uint32_t address_hi;
+    };
+    union {
+        struct {
+            uint32_t    vector                  : 8,
+                        delivery_mode           : 3,
+                        dest_mode_logical       : 1,
+                        reserved                : 2,
+                        active_low              : 1,
+                        is_level                : 1;
+        } QEMU_PACKED x86_data;
+        uint32_t data;
+    };
+};
+
+static void tdx_inject_notification(CPUState *cs, run_on_cpu_data data)
+{
+    X86CPU *cpu = X86_CPU(cs);
+    struct TdxEvent *event = data.host_ptr;
+    struct x86_msi x86_msi;
+    struct kvm_msi msi;
+    int ret;
+
+    x86_msi = (struct x86_msi) {
+        .x86_address_lo  = {
+            .reserved_0 = 0,
+            .dest_mode_logical = 0,
+            .redirect_hint = 0,
+            .reserved_1 = 0,
+            .virt_destid_8_14 = 0,
+            .destid_0_7 = cpu->apic_id & 0xff,
+        },
+        .x86_address_hi = {
+            .reserved = 0,
+            .destid_8_31 = cpu->apic_id >> 8,
+        },
+        .x86_data = {
+            .vector = event->notify,
+            .delivery_mode = APIC_DM_FIXED,
+            .dest_mode_logical = 0,
+            .reserved = 0,
+            .active_low = 0,
+            .is_level = 0,
+        },
+    };
+    msi = (struct kvm_msi) {
+        .address_lo = x86_msi.address_lo,
+        .address_hi = x86_msi.address_hi,
+        .data = x86_msi.data,
+        .flags = 0,
+        .devid = 0,
+    };
+
+    ret = kvm_vm_ioctl(kvm_state, KVM_SIGNAL_MSI, &msi);
+    if (ret < 0)
+        DPRINTF("Injected interrupt %llu ioctl failed %d\n", event->notify, ret);
+
+    if (event->done) {
+        g_free((void*)event->cmd);
+        g_free((void*)event->resp);
+        g_free(event);
+    }
+}
+
 static void *tdx_dispatch_serv_thread_fn(void *arg)
 {
     struct TdxService *service = arg;
@@ -349,7 +431,9 @@ event_handle:
                 printf("%s: write resp buf failed\n", __func__);
             }
 
-            // TODO: Inject MSI interrupt to notify TPA
+            async_run_on_cpu(event->cpu, tdx_inject_notification,
+                             RUN_ON_CPU_HOST_PTR(event));
+            DPRINTF("%s: event %p, inject interrupt to notify TPA.\n", __func__, event);
         }
         DPRINTF("%s: event %p is done.\n", __func__, event);
     }
