@@ -23,4 +23,6 @@ i386_softmmu_kvm_ss.add(when: 'CONFIG_TDX', if_true: files('tdx-vtpm-client.c'),
 
 i386_softmmu_kvm_ss.add(when: 'CONFIG_TDX', if_true: files('tdx-service-query.c'), if_false: files('tdx-stub.c'))
 
+i386_softmmu_kvm_ss.add(when: 'CONFIG_TDX', if_true: files('tdx-vmcall-service.c'), if_false: files('tdx-stub.c'))
+
 i386_system_ss.add_all(when: 'CONFIG_KVM', if_true: i386_softmmu_kvm_ss)
