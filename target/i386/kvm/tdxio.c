@@ -991,6 +991,8 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
                &tpa_spdm_policy_hob_guid, sizeof(QemuUUID));
 
         spdm_policy->StructVersion = 0x00010000;
+        spdm_policy->SpdmVersionNumberEntryCount = 1;
+        spdm_policy->SpdmVersionNumberEntry = 0x12;
         spdm_policy->SessionPolicy = treq->start_sess.session_policy;
         spdm_policy->MeasurementRequestAttributes =
                     treq->start_sess.meas_req_attr;
@@ -1012,6 +1014,8 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
                &tpa_tdisp_policy_hob_guid, sizeof(QemuUUID));
 
         tdisp_policy->StructVersion = 0x00010000;
+        tdisp_policy->TdispVersionNumCount = 1;
+        tdisp_policy->TdispVersionNum = 0x10;
         memset(tdisp_policy->TdispCapabilities, 0, 4);
 
         len = QEMU_ALIGN_UP(len, 8);
