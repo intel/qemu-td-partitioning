@@ -53,6 +53,16 @@ QemuUUID tdcm_guid = {{
     }
 }};
 
+static bool is_tpa_td(void)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *tdx;
+
+    tdx = TDX_GUEST(ms->cgs);
+
+    return tdx->tpa_td;
+}
+
 static void dump_memory(uint64_t addr, uint32_t size)
 {
     int i;

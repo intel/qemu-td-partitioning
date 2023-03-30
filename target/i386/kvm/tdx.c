@@ -1381,6 +1381,20 @@ static void tdx_guest_set_debug(Object *obj, bool value, Error **errp)
     }
 }
 
+static bool tdx_guest_get_tpa_td(Object *obj, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    return tdx->tpa_td;
+}
+
+static void tdx_guest_set_tpa_td(Object *obj, bool value, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    tdx->tpa_td = value;
+}
+
 static char *tdx_guest_get_quote_generation(
     Object *obj, Error **errp)
 {
@@ -1542,6 +1556,9 @@ static void tdx_guest_init(Object *obj)
     object_property_add_bool(obj, "debug",
                              tdx_guest_get_debug,
                              tdx_guest_set_debug);
+    object_property_add_bool(obj, "tpa-td",
+                             tdx_guest_get_tpa_td,
+                             tdx_guest_set_tpa_td);
     object_property_add_sha384(obj, "mrconfigid", tdx->mrconfigid,
                                OBJ_PROP_FLAG_READWRITE);
     object_property_add_sha384(obj, "mrowner", tdx->mrowner,

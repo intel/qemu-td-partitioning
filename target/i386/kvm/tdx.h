@@ -108,6 +108,7 @@ typedef struct TdxGuest {
     uint8_t mrconfigid[48];     /* sha348 digest */
     uint8_t mrowner[48];        /* sha348 digest */
     uint8_t mrownerconfig[48];  /* sha348 digest */
+    bool tpa_td;
 
     TdxFirmware tdvf;
     MemoryRegion *tdvf_region;

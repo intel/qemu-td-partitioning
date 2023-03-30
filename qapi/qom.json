@@ -887,6 +887,8 @@
 #
 # @debug: Whether it's a debug TD or not (default: 0)
 #
+# @tpa-td: Whether it's a TPA TD or not (default: 0)
+#
 # @mrconfigid: MRCONFIGID SHA384 hex string of 48 * 2 length (default: 0)
 #
 # @mrowner: MROWNER SHA384 hex string of 48 * 2 length (default: 0)
@@ -900,6 +902,7 @@
 { 'struct': 'TdxGuestProperties',
   'data': { '*sept-ve-disable': 'bool',
             '*debug': 'bool',
+            '*tpa-td': 'bool',
             '*mrconfigid': 'str',
             '*mrowner': 'str',
             '*mrownerconfig': 'str',
