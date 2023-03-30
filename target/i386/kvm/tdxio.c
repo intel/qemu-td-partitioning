@@ -597,39 +597,36 @@ static int tdx_serv_query(struct TdxEvent *event)
 
 static int tdx_serv_tdcm(struct TdxEvent *event)
 {
-    struct tdx_serv_resp *resp = (void *)event->resp;
-    struct tdcm_cmd_hdr *tdcm_cmd = (void *)(event->cmd +
-                                    sizeof(struct tdx_serv_cmd));
-    struct tdcm_resp_hdr *tdcm_resp = (void *)(event->resp +
-                                      sizeof(struct tdx_serv_resp));
+    struct tdcm_cmd_hdr *tdcm_cmd = (void *)event->cmd;
+    struct tdcm_resp_hdr *tdcm_resp = (void *)event->resp;
 
     switch (tdcm_cmd->command) {
     case TDCM_CMD_GET_DEV_CTX:
-        resp->length = sizeof(struct tdcm_resp_get_dev_ctx);
+        tdcm_resp->resp.length = sizeof(struct tdcm_resp_get_dev_ctx);
         tdcm_resp->status = tdx_serv_tdcm_get_dev_ctx(event);
         break;
     case TDCM_CMD_TDISP:
         /* TODO: call TDISP kernel driver */
 
-        resp->length = sizeof(struct tdcm_resp_tdisp);
+        tdcm_resp->resp.length = sizeof(struct tdcm_resp_tdisp);
         tdcm_resp->status = tdx_serv_tdcm_tdisp(event);
         break;
     case TDCM_CMD_MAP_DMA_GPA:
         /* TODO: call MAP_DMA_GPA kernel driver */
-
-        resp->length = sizeof(struct tdx_serv_resp) +
-                       sizeof(struct tdcm_resp_hdr);
+        tdcm_resp->resp.length = sizeof(struct tdcm_resp_hdr);
         tdcm_resp->status = TDCM_RESP_STS_FAIL;
         break;
     case TDCM_CMD_GET_DEV_INFO:
         tdcm_resp->status = tdx_serv_tdcm_get_dev_info(event);
         break;
     default:
-        resp->length = sizeof(struct tdx_serv_resp) +
-                       sizeof(struct tdcm_resp_hdr);
+        tdcm_resp->resp.length = sizeof(struct tdcm_resp_hdr);
         tdcm_resp->status = TDCM_RESP_STS_FAIL;
         break;
     }
+
+    DPRINTF("TDCM: event %p command %u status %u\n",
+            event, tdcm_cmd->command, tdcm_resp->status);
 
     event->done = true;
     return TDX_RESP_SERV;
