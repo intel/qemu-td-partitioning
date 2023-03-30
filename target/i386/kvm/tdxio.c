@@ -443,17 +443,6 @@ static int get_tmgr_fd(VFIOPCIDevice* vdev)
     return fd;
 }
 
-static GHashTable *handle_table_get(void)
-{
-    static GHashTable *handle_table;
-
-    if (handle_table == NULL) {
-        handle_table = g_hash_table_new(g_int64_hash, g_int64_equal);
-    }
-
-    return handle_table;
-}
-
 static uint8_t tdx_serv_tdcm_get_dev_handle(struct TdxEvent *event)
 {
     struct tdcm_cmd_get_dev_handle *cmd = (void *)event->cmd;
@@ -472,7 +461,6 @@ static uint8_t tdx_serv_tdcm_get_dev_handle(struct TdxEvent *event)
 
         resp->dev_handle = info.handle;
         vdev->handle = info.handle;
-        g_hash_table_insert(handle_table_get(), &vdev->handle, vdev);
     } else {
         resp->dev_handle = 0;
     }
@@ -507,12 +495,11 @@ static uint8_t tdx_serv_tdcm_get_dev_info(struct TdxEvent *event)
 {
     struct tdcm_cmd_get_dev_info *tdcm_cmd = (void *)event->cmd;
     struct tdcm_resp_get_dev_info *tdcm_resp = (void *)event->resp;
+    VFIOPCIDevice *vdev = find_vfio_by_devid(cmd->hdr.devid);
     struct tmgr_dev_info dev_info;
     uint32_t hdr_size, len;
-    VFIOPCIDevice *vdev = NULL;
     int ret, tmgr_fd;
 
-    vdev = g_hash_table_lookup(handle_table_get(), &tdcm_cmd->dev_handle);
 
     if (!vdev) {
         DPRINTF("handle 0x%llx, no SPDM device found\n",
