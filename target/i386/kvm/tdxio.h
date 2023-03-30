@@ -12,9 +12,8 @@
 
 #include <poll.h>
 #include <linux/kvm.h>
+#include <linux/tdisp_mgr.h>
 #include "qemu/uuid.h"
-
-#include "spdm.h"
 
 /* Status of Service Response */
 #define SERV_RESP_STS_RETURN            0
@@ -235,11 +234,12 @@ struct TdxService {
     __u32 status;
 };
 
-struct SpdmDevice {
-    int fd;
+struct TdispMgr {
+    int cfd;
     int index;
     __u32 devid;
     __u32 iommu_id;
+    __u32 session_idx;
     __u64 handle;
 
 #if 0
@@ -256,34 +256,34 @@ struct SpdmDevice {
     __u8 tpa_request_nonce[32];
 
     char *devpath;
-    QLIST_ENTRY(SpdmDevice) list;
+    QLIST_ENTRY(TdispMgr) list;
 };
 
-struct SpdmDevRequest {
-    struct spdm_request dev_req;
+struct TdispMgrRequest {
+    struct tmgr_request treq;
     __u64 id;
-    struct SpdmDevice *spdm_dev;
-#define SPDM_DEV_REQ_PENDING    0
-#define SPDM_DEV_REQ_QUEUED     1
-#define SPDM_DEV_REQ_DONE       2
+    struct TdispMgr *tmgr;
+#define TMGR_REQ_PENDING    0
+#define TMGR_REQ_QUEUED     1
+#define TMGR_REQ_DONE       2
     int status;
-    QLIST_ENTRY(SpdmDevRequest) list;
+    QLIST_ENTRY(TdispMgrRequest) list;
 };
 
-struct SpdmMgrListener {
+struct TdispMgrListener {
     QemuThread *thread;
     QemuMutex mutex;
     int sk_fd;
-    __u32 device_num;
-    QLIST_HEAD(, SpdmDevice) device_list;
+    __u32 tmgr_num;
+    QLIST_HEAD(, TdispMgr) tmgr_list;
     thread_func *func;
 };
 
-struct SpdmMgrRequest {
+struct TdispMgrReqList {
     QemuSemaphore sem;
     QemuMutex mutex;
-    QLIST_HEAD(, SpdmDevRequest) req_list;
-    __u32 req_num;
+    QLIST_HEAD(, TdispMgrRequest) tmreq_list;
+    __u32 tmreq_num;
 };
 
 #define EFI_HOB_TYPE_GUID_EXTENSION  0x0004
