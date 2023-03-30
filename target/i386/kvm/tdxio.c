@@ -963,6 +963,7 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
 
     tpa_dev_info->DeviceID = tmgr->devid;
     tpa_dev_info->IommuID = tmgr->iommu_id;
+    tpa_dev_info->FunctionID = tmgr->devid;
     tpa_dev_info->SpdmSessionIndex = tmgr->session_idx;
 
     /* TODO: Get from SPDM ? No need for start session. */
