@@ -237,6 +237,9 @@ static void *tdx_tm_listener_fn(void *arg)
                 tmp = strstr(cdev_node, "\n");
                 *tmp = '\0';
 
+                /* FIXME: do we have to wait before open cdev_node? */
+                sleep(2);
+
                 fd = open(cdev_node, O_RDONLY);
                 if (fd < 0) {
                     DPRINTF("Fail to open cdev_node %s\n", cdev_node);
