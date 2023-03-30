@@ -311,6 +311,8 @@ typedef struct {
      * It is used in TDCALL[TDG.SPDM.SETBINDING] and
      * TDCALL[TDG.STREAM.GETBINDING].
      */
+    __u32 FunctionID;
+    __u64 Reserved;
     __u32 IommuID;
     /* SpdmSessionIndex: SPDM session index of device connected to stream.
      * It is used in TDCALL[TDG.SPDM.SETBINDING] and
