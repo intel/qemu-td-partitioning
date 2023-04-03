@@ -22,6 +22,7 @@
 #include "sysemu/sysemu.h"
 #include "exec/address-spaces.h"
 #include "exec/ramblock.h"
+#include "migration/vmstate.h"
 
 #include "exec/address-spaces.h"
 #include "hw/i386/apic_internal.h"
@@ -1368,6 +1369,55 @@ static void tdx_guest_set_quote_generation(
     tdx->quote_generation_str = g_strdup(value);
 }
 
+#define UNASSIGNED_INTERRUPT_VECTOR     0
+
+/* At destination, (re)-send all inflight requests to quoting server */
+struct tdx_get_quote_state {
+    uint64_t gpa;
+    uint64_t buf_len;
+    uint32_t apic_id;
+    uint8_t event_notify_interrupt;
+};
+
+static const VMStateDescription tdx_get_quote_vmstate = {
+    .name = "TdxGetQuote",
+    .fields = (VMStateField[]) {
+        VMSTATE_UINT64(gpa, TdxGetQuoteState),
+        VMSTATE_UINT64(buf_len, TdxGetQuoteState),
+        VMSTATE_UINT32(apic_id, TdxGetQuoteState),
+        VMSTATE_UINT8(event_notify_interrupt, TdxGetQuoteState),
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static int tdx_guest_pre_save(void *opaque);
+static int tdx_guest_post_save(void *opaque);
+static int tdx_guest_post_load(void *opaque, int version_id);
+
+static const VMStateDescription tdx_guest_vmstate = {
+    .name = TYPE_TDX_GUEST,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .pre_save = &tdx_guest_pre_save,
+    .post_save = &tdx_guest_post_save,
+    .post_load = &tdx_guest_post_load,
+    .fields = (VMStateField[]) {
+        VMSTATE_UINT32(event_notify_apic_id, TdxGuest),
+        VMSTATE_UINT8(event_notify_interrupt, TdxGuest),
+
+        VMSTATE_INT32(quote_generation_num, TdxGuest),
+        VMSTATE_STRUCT_VARRAY_ALLOC(get_quote_state, TdxGuest,
+                                    quote_generation_num, 0,
+                                    tdx_get_quote_vmstate, TdxGetQuoteState),
+
+        /*
+         * quote_generation_str and quote_generation is local to the physical
+         * machine. It must be specified on the destination.
+         */
+        VMSTATE_END_OF_LIST()
+    }
+};
+
 /* tdx guest */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    tdx_guest,
@@ -1477,8 +1527,9 @@ static void tdx_guest_init(Object *obj)
     object_property_set_bool(obj, CONFIDENTIAL_GUEST_SUPPORT_DISABLE_PV_CLOCK,
                              true, NULL);
 
-    tdx->event_notify_interrupt = -1;
-    tdx->event_notify_apic_id = -1;
+    tdx->event_notify_interrupt = UNASSIGNED_INTERRUPT_VECTOR;
+    tdx->event_notify_apic_id = UNASSIGNED_APIC_ID;
+    QLIST_INIT(&tdx->get_quote_task_list);
 
     object_property_add_str(obj, "vtpm-type",
                             NULL, tdx_guest_set_vtpm_type);
@@ -1486,10 +1537,16 @@ static void tdx_guest_init(Object *obj)
                             NULL, tdx_guest_set_vtpm_path);
     object_property_add_str(obj, "vtpm-userid",
                             NULL, tdx_guest_set_vtpm_userid);
+
+    vmstate_register(NULL, 0, &tdx_guest_vmstate, tdx);
 }
 
 static void tdx_guest_finalize(Object *obj)
 {
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    qemu_mutex_destroy(&tdx->lock);
+    vmstate_unregister(NULL, &tdx_guest_vmstate, tdx);
 }
 
 static void tdx_guest_class_init(ObjectClass *oc, void *data)
@@ -1610,13 +1667,16 @@ static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 }
 
 struct tdx_get_quote_task {
-    uint32_t apic_id;
+    QLIST_ENTRY(tdx_get_quote_task) list;
+
     hwaddr gpa;
     uint64_t buf_len;
+    uint32_t apic_id;
+    uint8_t event_notify_interrupt;
+
     char *out_data;
     uint64_t out_len;
     struct tdx_get_quote_header hdr;
-    int event_notify_interrupt;
     QIOChannelSocket *ioc;
     QEMUTimer timer;
     bool timer_armed;
@@ -1654,6 +1714,104 @@ struct x86_msi {
         uint32_t data;
     };
 };
+
+static int tdx_guest_pre_save(void *opaque)
+{
+    TdxGuest *_tdx_guest = opaque;
+    struct tdx_get_quote_task *task;
+    int32_t i = 0;
+
+    qemu_mutex_lock(&_tdx_guest->lock);
+    _tdx_guest->get_quote_state = g_malloc_n(_tdx_guest->quote_generation_num,
+                                             sizeof(*_tdx_guest->get_quote_state));
+    QLIST_FOREACH(task, &_tdx_guest->get_quote_task_list, list) {
+        _tdx_guest->get_quote_state[i] = (struct tdx_get_quote_state) {
+            .gpa = task->gpa,
+            .buf_len = task->buf_len,
+            .apic_id = task->apic_id,
+            .event_notify_interrupt = task->event_notify_interrupt,
+        };
+
+        assert(i < _tdx_guest->quote_generation_num);
+        i++;
+    }
+    qemu_mutex_unlock(&_tdx_guest->lock);
+    return 0;
+}
+
+static int tdx_guest_post_save(void *opaque)
+{
+    TdxGuest *_tdx_guest = opaque;
+
+    g_free(_tdx_guest->get_quote_state);
+    _tdx_guest->get_quote_state = NULL;
+    return 0;
+}
+
+static void __tdx_handle_get_quote(MachineState *ms, TdxGuest *tdx,
+                                   hwaddr gpa, uint64_t buf_len,
+                                   uint32_t apic_id,
+                                   uint8_t event_notify_interrupt,
+                                   struct kvm_tdx_vmcall *vmcall);
+
+static int tdx_guest_post_load(void *opaque, int version_id)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    TdxGuest *_tdx_guest = opaque;
+    uint32_t inflight_quote_num = _tdx_guest->quote_generation_num;
+    int i;
+
+    /* reset the quote num and re-trigger the inflight quote in dst-TD */
+    _tdx_guest->quote_generation_num = 0;
+    for (i = 0; i < inflight_quote_num; i++) {
+        TdxGetQuoteState *state = &_tdx_guest->get_quote_state[i];
+
+        __tdx_handle_get_quote(ms, _tdx_guest, state->gpa, state->buf_len,
+                               state->apic_id, state->event_notify_interrupt,
+                               NULL);
+    }
+
+    g_free(_tdx_guest->get_quote_state);
+    _tdx_guest->get_quote_state = NULL;
+    return 0;
+}
+
+static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+{
+    hwaddr gpa = vmcall->in_r12;
+    uint64_t buf_len = vmcall->in_r13;
+    MachineState *ms;
+    TdxGuest *tdx;
+
+    trace_tdx_handle_get_quote(gpa, buf_len);
+    vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
+
+    /* GPA must be shared. */
+    if (!(gpa & tdx_shared_bit(cpu))) {
+        return;
+    }
+    gpa &= ~tdx_shared_bit(cpu);
+
+    if (!QEMU_IS_ALIGNED(gpa, 4096) || !QEMU_IS_ALIGNED(buf_len, 4096)) {
+        vmcall->status_code = TDG_VP_VMCALL_ALIGN_ERROR;
+        return;
+    }
+    if (buf_len == 0) {
+        /*
+         * REVERTME: Accept old GHCI GetQuote with R13 buf_len = 0.
+         * buf size is 8KB. also hdr.out_len includes the header size.
+         */
+#define GHCI_GET_QUOTE_BUFSIZE_OLD      (8 * 1024)
+        warn_report("Guest attestation driver uses old GetQuote ABI.(R13 == 0) "
+                    "Please upgrade guest kernel.\n");
+        buf_len = GHCI_GET_QUOTE_BUFSIZE_OLD;
+    }
+
+    ms = MACHINE(qdev_get_machine());
+    tdx = TDX_GUEST(ms->cgs);
+    __tdx_handle_get_quote(ms, tdx, gpa, buf_len, UNASSIGNED_APIC_ID,
+                           UNASSIGNED_INTERRUPT_VECTOR, vmcall);
+}
 
 static int tdx_td_notify(uint32_t apic_id, int vector)
 {
@@ -1722,6 +1880,14 @@ static void tdx_getquote_task_cleanup(struct tdx_get_quote_task *t, bool outlen_
                      t->event_notify_interrupt, strerror(-ret));
     }
 
+    /* Maintain the number of in-flight requests. */
+    ms = MACHINE(qdev_get_machine());
+    tdx = TDX_GUEST(ms->cgs);
+    qemu_mutex_lock(&tdx->lock);
+    QLIST_REMOVE(t, list);
+    tdx->quote_generation_num--;
+    qemu_mutex_unlock(&tdx->lock);
+
     if (t->ioc->fd > 0) {
         qemu_set_fd_handler(t->ioc->fd, NULL, NULL, NULL);
     }
@@ -1731,15 +1897,7 @@ static void tdx_getquote_task_cleanup(struct tdx_get_quote_task *t, bool outlen_
         timer_del(&t->timer);
     g_free(t->out_data);
     g_free(t);
-
-    /* Maintain the number of in-flight requests. */
-    ms = MACHINE(qdev_get_machine());
-    tdx = TDX_GUEST(ms->cgs);
-    qemu_mutex_lock(&tdx->lock);
-    tdx->quote_generation_num--;
-    qemu_mutex_unlock(&tdx->lock);
 }
-
 
 static void tdx_get_quote_read(void *opaque)
 {
@@ -1886,32 +2044,15 @@ out:
     return;
 }
 
-static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+static void __tdx_handle_get_quote(MachineState *ms, TdxGuest *tdx,
+                                   hwaddr gpa, uint64_t buf_len,
+                                   uint32_t apic_id,
+                                   uint8_t event_notify_interrupt,
+                                   struct kvm_tdx_vmcall *vmcall)
 {
-    hwaddr gpa = vmcall->in_r12;
-    uint64_t buf_len = vmcall->in_r13;
     struct tdx_get_quote_header hdr;
-    MachineState *ms;
-    TdxGuest *tdx;
     QIOChannelSocket *ioc;
     struct tdx_get_quote_task *t;
-
-    trace_tdx_handle_get_quote(gpa, buf_len);
-    vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
-
-    /* GPA must be shared. */
-    if (!(gpa & tdx_shared_bit(cpu))) {
-        return;
-    }
-    gpa &= ~tdx_shared_bit(cpu);
-
-    if (!QEMU_IS_ALIGNED(gpa, 4096) || !QEMU_IS_ALIGNED(buf_len, 4096)) {
-        vmcall->status_code = TDG_VP_VMCALL_ALIGN_ERROR;
-        return;
-    }
-    if (buf_len == 0) {
-        return;
-    }
 
     if (address_space_read(&address_space_memory, gpa, MEMTXATTRS_UNSPECIFIED,
                            &hdr, sizeof(hdr)) != MEMTX_OK) {
@@ -1925,8 +2066,9 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
      * leak.  Enforce it.  The initial value of them doesn't matter for qemu to
      * process the request.
      */
-    if (le64_to_cpu(hdr.error_code) != TDX_VP_GET_QUOTE_SUCCESS ||
-        le32_to_cpu(hdr.out_len) != 0) {
+    if ((le64_to_cpu(hdr.error_code) != TDX_VP_GET_QUOTE_SUCCESS &&
+         le64_to_cpu(hdr.error_code) != TDX_VP_GET_QUOTE_IN_FLIGHT) ||
+         le32_to_cpu(hdr.out_len) != 0) {
         return;
     }
 
@@ -1949,7 +2091,6 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
     ioc = qio_channel_socket_new();
 
     t = g_malloc(sizeof(*t));
-    t->apic_id = tdx->event_notify_apic_id;
     t->gpa = gpa;
     t->buf_len = buf_len;
     t->out_data = g_malloc(t->buf_len);
@@ -1963,20 +2104,34 @@ static void tdx_handle_get_quote(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         /* Prevent too many in-flight get-quote request. */
         tdx->quote_generation_num >= TDX_MAX_GET_QUOTE_REQUEST) {
         qemu_mutex_unlock(&tdx->lock);
-        vmcall->status_code = TDG_VP_VMCALL_RETRY;
+        if (vmcall) {
+            vmcall->status_code = TDG_VP_VMCALL_RETRY;
+        }
         object_unref(OBJECT(ioc));
         g_free(t->out_data);
         g_free(t);
         return;
     }
+    QLIST_INSERT_HEAD(&tdx->get_quote_task_list, t, list);
+    if (apic_id == UNASSIGNED_APIC_ID) {
+        t->apic_id = tdx->event_notify_apic_id;
+    } else {
+        t->apic_id = apic_id;
+    }
     tdx->quote_generation_num++;
-    t->event_notify_interrupt = tdx->event_notify_interrupt;
+    if (event_notify_interrupt == UNASSIGNED_INTERRUPT_VECTOR) {
+        t->event_notify_interrupt = tdx->event_notify_interrupt;
+    } else {
+        t->event_notify_interrupt = event_notify_interrupt;
+    }
     qio_channel_socket_connect_async(
         ioc, tdx->quote_generation, tdx_handle_get_quote_connected, t, NULL,
         NULL);
     qemu_mutex_unlock(&tdx->lock);
 
-    vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+    if (vmcall) {
+        vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+    }
 }
 
 static void tdx_panicked_on_fatal_error(X86CPU *cpu, uint64_t error_code,

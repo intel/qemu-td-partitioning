@@ -94,6 +94,9 @@ typedef struct TdxVmcallService {
     char *vtpm_userid;
 } TdxVmcallService;
 
+/* For migration */
+typedef struct tdx_get_quote_state TdxGetQuoteState;
+struct tdx_get_quote_task;
 
 typedef struct TdxGuest {
     ConfidentialGuestSupport parent_obj;
@@ -113,13 +116,17 @@ typedef struct TdxGuest {
     TdxRamEntry *ram_entries;
 
     /* runtime state */
-    int event_notify_interrupt;
     uint32_t event_notify_apic_id;
+    uint8_t event_notify_interrupt;
 
     /* GetQuote */
-    int quote_generation_num;
+    int32_t quote_generation_num;
     char *quote_generation_str;
     SocketAddress *quote_generation;
+
+    /* For migration. */
+    QLIST_HEAD(, tdx_get_quote_task) get_quote_task_list;
+    TdxGetQuoteState *get_quote_state;
 
     TdxVmcallService vmcall_service;
 } TdxGuest;
