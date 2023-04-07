@@ -949,7 +949,7 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
                sizeof(struct tpa_resp_hdr);
 
     /* Fill TPA device information HOB. */
-    hob_len = sizeof(*tpa_dev_info);
+    hob_len = QEMU_ALIGN_UP(sizeof(*tpa_dev_info), 8);
     tpa_dev_info->header.HobType = EFI_HOB_TYPE_GUID_EXTENSION;
     tpa_dev_info->header.HobLength = hob_len;
     tpa_dev_info->header.Reserved = 0;
@@ -968,7 +968,6 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
            tmreq->tmgr->tpa_request_nonce, TPA_REQUEST_NONCE_LEN);
 
     /* Align on 8 bytes according to PI spec 4.5.2. */
-    hob_len = QEMU_ALIGN_UP(hob_len, 8);
 
     DPRINTF("hob_len: 0x%x, tpa_resp->operation: %d, sizeof(operation): %ld\n",
             hob_len, tpa_resp->operation, sizeof(tpa_resp->operation));
@@ -980,7 +979,7 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
         uint32_t len;
 
         /* Fill TPA SPDM policy HOB. */
-        len = sizeof(*spdm_policy);
+        len = QEMU_ALIGN_UP(sizeof(*spdm_policy), 8);
         spdm_policy->header.HobType = EFI_HOB_TYPE_GUID_EXTENSION;
         spdm_policy->header.HobLength = len;
         spdm_policy->header.Reserved = 0;
@@ -994,7 +993,6 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
         spdm_policy->MeasurementRequestAttributes =
                     treq->start_sess.meas_req_attr;
 
-        len = QEMU_ALIGN_UP(len, 8);
         hob_len += len;
 
         /* Fill TPA TDISP policy HOB. */
@@ -1003,7 +1001,7 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
         DPRINTF("hob_len: 0x%x, spdm_policy: 0x%lx, tdisp_policy: 0x%lx\n",
                 hob_len, (uint64_t)spdm_policy, (uint64_t)tdisp_policy);
 
-        len = sizeof(*tdisp_policy);
+        len = QEMU_ALIGN_UP(sizeof(*tdisp_policy), 8);
         tdisp_policy->header.HobType = EFI_HOB_TYPE_GUID_EXTENSION;
         tdisp_policy->header.HobLength = len;
         tdisp_policy->header.Reserved = 0;
@@ -1015,7 +1013,6 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
         tdisp_policy->TdispVersionNum = 0x10;
         memset(tdisp_policy->TdispCapabilities, 0, 4);
 
-        len = QEMU_ALIGN_UP(len, 8);
         hob_len += len;
 
         break;
@@ -1073,8 +1070,8 @@ static void tdx_serv_fill_hob_list(struct TdxEvent *event,
     DPRINTF("end_hob: 0x%lx, hob_len: 0x%x\n", (uint64_t)end_hob, hob_len);
 
     end_hob->HobType = EFI_HOB_TYPE_END_OF_HOB_LIST;
-    end_hob->HobLength = sizeof(*end_hob);
-    hob_len += sizeof(*end_hob);
+    end_hob->HobLength = QEMU_ALIGN_UP(sizeof(*end_hob), 8);
+    hob_len += end_hob->HobLength;
 
     DPRINTF("end_hob: 0x%lx, hob_len: 0x%x\n", (uint64_t)end_hob, hob_len);
 
