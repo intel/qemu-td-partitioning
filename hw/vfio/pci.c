@@ -3618,6 +3618,16 @@ static void vfio_pci_reset(DeviceState *dev)
 
     trace_vfio_pci_reset(vdev->vbasedev.name);
 
+    if (vdev->secure) {
+        /*
+         * In case that VFIO-PCI device is a TDI, and has already been put into
+         * LOCKED state so need to skip reset which will cause TDI entering
+         * ERROR state and no method to recover.
+         */
+        printf("%s: skip reset for TDI: %s\n", __func__, vdev->vbasedev.name);
+        return;
+    }
+
     vfio_pci_pre_reset(vdev);
 
     if (vdev->display != ON_OFF_AUTO_OFF) {
