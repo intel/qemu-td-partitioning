@@ -969,6 +969,8 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 /* Speculative Store Bypass Disable */
 #define CPUID_7_0_EDX_SPEC_CTRL_SSBD    (1U << 31)
 
+/* SHA512 Instructions */
+#define CPUID_7_1_EAX_SHA512            (1U << 0)
 /* AVX VNNI Instruction */
 #define CPUID_7_1_EAX_AVX_VNNI          (1U << 4)
 /* AVX512 BFloat16 Instruction */
