@@ -973,6 +973,8 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_1_EAX_SHA512            (1U << 0)
 /* SM3 Instructions */
 #define CPUID_7_1_EAX_SM3               (1U << 1)
+/* SM4 Instructions */
+#define CPUID_7_1_EAX_SM4               (1U << 2)
 /* AVX VNNI Instruction */
 #define CPUID_7_1_EAX_AVX_VNNI          (1U << 4)
 /* AVX512 BFloat16 Instruction */
