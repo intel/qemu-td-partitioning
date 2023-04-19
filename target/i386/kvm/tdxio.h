@@ -170,7 +170,6 @@ struct tdcm_cmd_get_dev_ctx {
 
 /* TDG.VP.VMCALL <Service.TDCM.GetDeviceContext> response */
 struct tdcm_resp_get_dev_ctx {
-    struct tdx_serv_resp resp;
     struct tdcm_resp_hdr hdr;
     __u32 func_id;
     __u64 rsvd;
@@ -179,7 +178,6 @@ struct tdcm_resp_get_dev_ctx {
 
 /* TDG.VP.VMCALL <Service.TDCM.TDISP> command */
 struct tdcm_cmd_tdisp {
-    struct tdx_serv_cmd cmd;
     struct tdcm_cmd_hdr hdr;
 };
 
