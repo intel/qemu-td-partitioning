@@ -2887,8 +2887,23 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
                                 x86ms->bus_lock_ratelimit, BUS_LOCK_SLICE_TIME);
         }
 
-	if (x86ms->kvm_type && !strcmp(x86ms->kvm_type, "td-part-enlighten"))
+        if (x86ms->kvm_type && !strcmp(x86ms->kvm_type, "td-part-enlighten")) {
+            struct kvm_tdp_vm_ctrl tdp_vm_ctrl = { 0 };
+            struct kvm_tdx_cmd tdp_cmd = { 0 };
+
+            tdp_vm_ctrl.val |= TDP_ENABLE_SHARED_EPTP;
+            tdp_vm_ctrl.mask |= TDP_ENABLE_SHARED_EPTP;
+            tdp_cmd.id = KVM_TDP_SET_VM_CTRL;
+            tdp_cmd.data = (__u64)&tdp_vm_ctrl;
+            ret = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdp_cmd);
+            if (ret < 0) {
+                error_report("td-part: Failed to set tdp_vm_ctl: %s",
+                             strerror(-ret));
+                return ret;
+            }
+
             tdp_enlightenment = true;
+        }
     }
 
     if (s->notify_vmexit != NOTIFY_VMEXIT_OPTION_DISABLE &&
