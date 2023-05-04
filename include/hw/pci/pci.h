@@ -146,6 +146,7 @@ typedef struct PCIIORegion {
 #define PCI_BAR_UNMAPPED (~(pcibus_t)0)
     pcibus_t size;
     uint8_t type;
+    bool fixed;
     MemoryRegion *memory;
     MemoryRegion *address_space;
 } PCIIORegion;

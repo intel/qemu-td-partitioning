@@ -373,7 +373,7 @@ static void pci_reset_regions(PCIDevice *dev)
 
     for (r = 0; r < PCI_NUM_REGIONS; ++r) {
         PCIIORegion *region = &dev->io_regions[r];
-        if (!region->size) {
+        if (!region->size || region->fixed) {
             continue;
         }
 
