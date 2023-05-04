@@ -1726,6 +1726,7 @@ static void vfio_bars_register(VFIOPCIDevice *vdev)
 static int vfio_bar_set_identity_addr(VFIOPCIDevice *vdev, int nr)
 {
     PCIDevice *pdev = &vdev->pdev;
+    PCIIORegion *region = &pdev->io_regions[nr];
     VFIOBAR *bar = &vdev->bars[nr];
     size_t len = sizeof(uint32_t);
     struct {
@@ -1758,6 +1759,7 @@ static int vfio_bar_set_identity_addr(VFIOPCIDevice *vdev, int nr)
                               val, sizeof(val));
     }
 
+    region->fixed = true;
     return 0;
 }
 
