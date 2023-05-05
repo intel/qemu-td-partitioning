@@ -2838,9 +2838,8 @@ void pci_setup_iommu(PCIBus *bus, PCIIOMMUFunc fn, void *opaque)
     bus->iommu_opaque = opaque;
 }
 
-static void pci_dev_get_w64(PCIBus *b, PCIDevice *dev, void *opaque)
+static void pci_dev_get_bar_range(PCIBus *b, PCIDevice *dev, Range *range, bool w64)
 {
-    Range *range = opaque;
     PCIDeviceClass *pc = PCI_DEVICE_GET_CLASS(dev);
     uint16_t cmd = pci_get_word(dev->config + PCI_COMMAND);
     int i;
@@ -2867,8 +2866,7 @@ static void pci_dev_get_w64(PCIBus *b, PCIDevice *dev, void *opaque)
         Range region_range;
 
         if (!r->size ||
-            (r->type & PCI_BASE_ADDRESS_SPACE_IO) ||
-            !(r->type & PCI_BASE_ADDRESS_MEM_TYPE_64)) {
+            (r->type & PCI_BASE_ADDRESS_SPACE_IO)) {
             continue;
         }
 
@@ -2878,7 +2876,11 @@ static void pci_dev_get_w64(PCIBus *b, PCIDevice *dev, void *opaque)
             continue;
         }
 
-        lob = MAX(lob, 0x1ULL << 32);
+        if (w64 != !!(r->type & PCI_BASE_ADDRESS_MEM_TYPE_64)) {
+            continue;
+        } else if (r->type & PCI_BASE_ADDRESS_MEM_TYPE_64) {
+            lob = MAX(lob, 0x1ULL << 32);
+        }
 
         if (upb >= lob) {
             range_set_bounds(&region_range, lob, upb);
@@ -2887,10 +2889,31 @@ static void pci_dev_get_w64(PCIBus *b, PCIDevice *dev, void *opaque)
     }
 }
 
+
+static void pci_dev_get_w64(PCIBus *b, PCIDevice *dev, void *opaque)
+{
+    Range *range = opaque;
+
+    pci_dev_get_bar_range(b, dev, range, true);
+}
+
 void pci_bus_get_w64_range(PCIBus *bus, Range *range)
 {
     range_make_empty(range);
     pci_for_each_device_under_bus(bus, pci_dev_get_w64, range);
+}
+
+static void pci_dev_get_w32(PCIBus *b, PCIDevice *dev, void *opaque)
+{
+    Range *range = opaque;
+
+    pci_dev_get_bar_range(b, dev, range, false);
+}
+
+void pci_bus_get_w32_range(PCIBus *bus, Range *range)
+{
+    range_make_empty(range);
+    pci_for_each_device_under_bus(bus, pci_dev_get_w32, range);
 }
 
 static bool pcie_has_upstream_port(PCIDevice *dev)
