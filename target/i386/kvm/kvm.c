@@ -2893,6 +2893,10 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
 
             tdp_vm_ctrl.val |= TDP_ENABLE_SHARED_EPTP;
             tdp_vm_ctrl.mask |= TDP_ENABLE_SHARED_EPTP;
+            if (object_property_get_bool(OBJECT(ms), "vfio-identity-bars", &local_err)) {
+                tdp_vm_ctrl.val |= TDP_ENABLE_TDVMCALL;
+                tdp_vm_ctrl.mask |= TDP_ENABLE_TDVMCALL;
+            }
             tdp_cmd.id = KVM_TDP_SET_VM_CTRL;
             tdp_cmd.data = (__u64)&tdp_vm_ctrl;
             ret = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdp_cmd);
