@@ -765,6 +765,37 @@ void pc_machine_done(Notifier *notifier, void *data)
     PCMachineState *pcms = container_of(notifier,
                                         PCMachineState, machine_done);
     X86MachineState *x86ms = X86_MACHINE(pcms);
+    Error *local_err = NULL;
+
+    if (object_property_get_bool(OBJECT(MACHINE(pcms)), "vfio-identity-bars", &local_err)) {
+        Object *pci_host = acpi_get_i386_pci_host();
+
+        if (pci_host) {
+            uint64_t pci_hole64_start;
+            Range w32, w64;
+
+            pci_bus_get_w32_range(PCI_HOST_BRIDGE(pci_host)->bus, &w32);
+
+            if ((range_lob(&w32) < x86ms->below_4g_mem_size) ||
+                (range_upb(&w32) >= IO_APIC_DEFAULT_ADDRESS)) {
+                error_report("PCI device bar 0x%"PRIx64"-0x%"PRIx64
+                             " out of 32bit PCI window 0x%"PRIx64"-0x%"PRIx32,
+                             range_lob(&w32), range_upb(&w32), x86ms->below_4g_mem_size,
+                             IO_APIC_DEFAULT_ADDRESS);
+                exit(EXIT_FAILURE);
+            }
+
+            pci_hole64_start = pc_pci_hole64_start();
+            pci_bus_get_w64_range(PCI_HOST_BRIDGE(pci_host)->bus, &w64);
+
+            if (range_lob(&w64) < pci_hole64_start) {
+                error_report("PCI device bar out of 64bit PCI window "
+                             "0x%"PRIx64" < 0x%"PRIx64,
+                             range_lob(&w64), pci_hole64_start);
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
 
     cxl_hook_up_pxb_registers(pcms->bus, &pcms->cxl_devices_state,
                               &error_fatal);
