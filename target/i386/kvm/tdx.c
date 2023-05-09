@@ -2640,6 +2640,12 @@ static void tdx_handle_vmcall(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         break;
     case TDG_VP_VMCALL_SERVICE:
         tdx_handle_vmcall_service(cpu, vmcall);
+
+        /*Need remove*/
+        if (tdx_service_init) {
+            tdx_handle_service(cpu, vmcall);
+        }
+
         break;
     default:
         warn_report("unknown tdg.vp.vmcall type 0x%llx subfunction 0x%llx",

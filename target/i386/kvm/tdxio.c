@@ -289,6 +289,18 @@ static int tdx_serv_tdcm(struct TdxEvent *event)
     return TDX_RESP_SERV;
 }
 
+static void tdx_queue_service(struct TdxService *tdx_service,
+                              struct TdxEvent *event)
+{
+    qemu_mutex_lock(&tdx_service->mutex);
+    QLIST_INSERT_HEAD(&tdx_service->event_list, event, list);
+    tdx_service->event_num++;
+    qemu_mutex_unlock(&tdx_service->mutex);
+
+    DPRINTF("queue event %p event num %u\n", event, tdx_service->event_num);
+    qemu_sem_post(&tdx_service->sem);
+}
+
 static int tdx_event_handle(struct TdxEvent *event)
 {
     struct tdx_serv_cmd *cmd = (void *)event->cmd;
@@ -480,4 +492,109 @@ int tdx_services_init(void)
     printf("Success to initialize TDX services.\n");
 
     return ret;
+}
+
+void tdx_handle_service(X86CPU *cpu, struct kvm_tdx_vmcall
+                               *vmcall)
+{
+    struct TdxEvent *event;
+    uint32_t cmd_len, resp_len;
+    hwaddr cmd_gpa, resp_gpa;
+    void *cmd, *resp;
+    int ret;
+
+    vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
+
+    cmd_gpa = vmcall->in_r12;
+    resp_gpa = vmcall->in_r13;
+
+    /* alloc & fill cmd buffer */
+    cmd_len = sizeof(struct tdx_serv_cmd);
+    cmd = g_malloc(cmd_len);
+    if (address_space_read(&address_space_memory, cmd_gpa,
+                           MEMTXATTRS_UNSPECIFIED, cmd,
+                           cmd_len) != MEMTX_OK) {
+        printf("%s: read cmd header failed\n", __func__);
+        goto err_free_cmd;
+    }
+
+    cmd_len = ((struct tdx_serv_cmd *)cmd)->length;
+    if (!cmd_len || cmd_len < sizeof(struct tdx_serv_cmd)) {
+        printf("%s: invalid cmd length\n", __func__);
+        goto err_free_cmd;
+    }
+
+    cmd = g_realloc(cmd, cmd_len);
+    if (address_space_read(&address_space_memory, cmd_gpa,
+                           MEMTXATTRS_UNSPECIFIED, cmd,
+                           cmd_len) != MEMTX_OK) {
+        printf("%s: read cmd buf failed\n", __func__);
+        goto err_free_cmd;
+    }
+
+    /* alloc and fill resp buffer */
+    resp_len = sizeof(struct tdx_serv_resp);
+    resp = g_malloc(resp_len);
+    if (address_space_read(&address_space_memory, resp_gpa,
+                           MEMTXATTRS_UNSPECIFIED, resp,
+                           resp_len) != MEMTX_OK) {
+        printf("%s: read resp header failed\n", __func__);
+        goto err_free_resp;
+    }
+
+    resp_len = ((struct tdx_serv_resp *)resp)->length;
+    if (!resp_len || resp_len < sizeof(struct tdx_serv_resp)) {
+        printf("%s: invalid resp length\n", __func__);
+        goto err_free_resp;
+    }
+
+    resp = g_realloc(resp, resp_len);
+
+    /* create a TdxEvent and handle events */
+    event = g_malloc0(sizeof(struct TdxEvent));
+    event->cpu = &cpu->parent_obj;
+    event->cmd = (__u64)cmd;
+    event->resp = (__u64)resp;
+    event->notify = vmcall->in_r14;
+    event->timeout = vmcall->in_r15;
+    event->resp_gpa = resp_gpa;
+    event->done = false;
+
+    if (!event->notify) {
+        printf("%s: no notification vector, sync service request\n", __func__);
+        ret = tdx_event_handle(event);
+        if (ret == TDX_NOT_RESP_SERV) {
+            DPRINTF("Need event notification to defer handling.");
+        }
+
+        /* copy response data back */
+        if (address_space_write(
+                &address_space_memory, event->resp_gpa,
+                MEMTXATTRS_UNSPECIFIED, (void*)event->resp,
+                ((struct tdx_serv_resp *)event->resp)->length) != MEMTX_OK) {
+                printf("%s: write resp buf failed\n", __func__);
+                goto err_free_event;
+        }
+
+        if (event->done) {
+            g_free(event);
+            g_free(resp);
+            g_free(cmd);
+        }
+    } else {
+        printf("%s: notification vector 0x%llx, async service request\n",
+               __func__, event->notify);
+        tdx_queue_service(&tdx_dispatch_service, event);
+    }
+
+    vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
+    return;
+
+err_free_event:
+    g_free(event);
+err_free_resp:
+    g_free(resp);
+err_free_cmd:
+    g_free(cmd);
+    return;
 }
