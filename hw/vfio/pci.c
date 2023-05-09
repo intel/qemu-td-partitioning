@@ -3330,6 +3330,7 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
 
     ret = vfio_pci_enable_tdi(vdev);
     if (ret) {
+        error_setg(errp, "failed to enable TDI");
         goto error;
     }
 
