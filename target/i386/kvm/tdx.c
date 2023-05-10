@@ -2267,11 +2267,6 @@ static int tdx_vmcall_service_sanity_check(X86CPU *cpu,
 
     for (int i = 0; i < 2; ++i) {
 
-        if (!(addrs[i] & tdx_shared_bit(cpu))) {
-            VMCALL_DEBUG("gpa in r12/r13 should have shared bit\n");
-            return -1;
-        }
-
         if (!QEMU_IS_ALIGNED((uint64_t)addrs[i], 4096)) {
             VMCALL_DEBUG("gpa in r12/r13 should 4K aligned\n");
             return -1;
