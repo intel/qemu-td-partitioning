@@ -75,14 +75,6 @@ struct TdispMgrListener tmgr_listener = {
 
 /* Below GUIDs are based on GHCI 2.0_0.6.4. */
 
-/* Query Service GUID */
-QemuUUID query_guid = {{
-    .fields = {
-        0xfb6fc5e1, 0x3378, 0x4acb,
-        0x89, 0x64, {0xfa, 0x5e, 0xe4, 0x3b, 0x9c, 0x8a}
-    }
-}};
-
 /* TPA Service GUID */
 QemuUUID tpa_guid = {{
     .fields = {
@@ -568,33 +560,6 @@ static uint8_t tdx_serv_tdcm_get_dev_info(struct TdxEvent *event)
     return TDCM_RESP_STS_OK;
 }
 
-static int tdx_serv_query(struct TdxEvent *event)
-{
-    struct tdx_serv_resp *serv_resp = (void *)event->resp;
-    struct query_cmd *cmd = (void *)(event->cmd +
-                               sizeof(struct tdx_serv_cmd));
-    struct query_resp *resp = (void *)(event->resp +
-                                 sizeof(struct tdx_serv_resp));
-
-    if (qemu_uuid_is_equal(&cmd->guid, &tpa_guid)  ||
-        qemu_uuid_is_equal(&cmd->guid, &spdm_guid) ||
-        qemu_uuid_is_equal(&cmd->guid, &tdcm_guid)) {
-        resp->status = QUERY_SERV_SUPPORT;
-    } else {
-        resp->status = QUERY_SERV_UNSUPPORT;
-    }
-
-    resp->version = 0;
-    resp->command = 0;
-    memcpy(&resp->guid, &cmd->guid, sizeof(QemuUUID));
-
-    serv_resp->length = sizeof(struct tdx_serv_resp) +
-                        sizeof(struct query_resp);
-
-    event->done = true;
-    return TDX_RESP_SERV;
-}
-
 static int tdx_serv_tdcm(struct TdxEvent *event)
 {
     struct tdcm_cmd_hdr *tdcm_cmd = (void *)event->cmd;
@@ -906,9 +871,7 @@ static int tdx_event_handle(struct TdxEvent *event)
     resp->status = SERV_RESP_STS_RETURN;
 
     if (is_tpa_td()) {
-        if (qemu_uuid_is_equal(&cmd->guid, &query_guid)) {
-            ret = tdx_serv_query(event);
-        } else if (qemu_uuid_is_equal(&cmd->guid, &tpa_guid)) {
+        if (qemu_uuid_is_equal(&cmd->guid, &tpa_guid)) {
             ret = tdx_serv_tpa(event);
         } else if (qemu_uuid_is_equal(&cmd->guid, &spdm_guid)) {
             ret = tdx_serv_spdm(event);
