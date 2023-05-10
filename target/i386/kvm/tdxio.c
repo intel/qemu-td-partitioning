@@ -39,7 +39,7 @@
 
 #define TDX_SERVICE_NAME "tdx-service"
 
-bool tdx_service_init = false;
+bool tdxio_service_init = false;
 
 static EventNotifier tdx_tmgr_notifier;
 static int tdx_tmgr_eventfd;
@@ -1510,7 +1510,7 @@ wait_spdm:
     return NULL;
 }
 
-static int tdx_init_service(struct TdxService *tdx_service)
+static int tdxio_init_service(struct TdxService *tdx_service)
 {
     if (!tdx_service)
         return -1;
@@ -1528,12 +1528,12 @@ static int tdx_init_service(struct TdxService *tdx_service)
     return 0;
 }
 
-int tdx_services_init(void)
+int tdxio_services_init(void)
 {
     int ret = 0;
 
     /* Common service */
-    ret = tdx_init_service(&tdx_dispatch_service);
+    ret = tdxio_init_service(&tdx_dispatch_service);
     if (ret < 0) {
         fprintf(stderr, "kvm: Failed to initialize TDX service. %d\n", ret);
         return ret;
@@ -1541,12 +1541,12 @@ int tdx_services_init(void)
 
     /* TPA-TD service */
     if (is_tpa_td()) {
-        ret = tdx_init_service(&tdx_tpa_serv);
+        ret = tdxio_init_service(&tdx_tpa_serv);
         if (ret < 0) {
             fprintf(stderr, "kvm: Failed to initialize TPA service. %d\n", ret);
             return ret;
         }
-        ret = tdx_init_service(&tdx_spdm_serv);
+        ret = tdxio_init_service(&tdx_spdm_serv);
         if (ret < 0) {
             fprintf(stderr, "kvm: Failed to initialize SPDM service. %d\n", ret);
             return ret;
@@ -1570,13 +1570,13 @@ int tdx_services_init(void)
     }
     /* Normal-TD service */
 
-    tdx_service_init = true;
+    tdxio_service_init = true;
     printf("Success to initialize TDX services.\n");
 
     return ret;
 }
 
-void tdx_handle_service(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
+void tdxio_handle_service(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 {
     struct TdxEvent *event;
     uint32_t cmd_len, resp_len;

@@ -1175,7 +1175,7 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
         set_encrypted_memory_debug_ops();
     }
 
-    int ret = tdx_services_init();
+    int ret = tdxio_services_init();
     if (ret < 0) {
         error_report("kvm: Failed to initialize TDX services: %s",
                      strerror(-ret));
@@ -2562,9 +2562,13 @@ static void tdx_handle_vmcall_service(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall
     handler = tdx_vmcall_service_find_handler(&guid,
                                               &tdx->vmcall_service);
     if (!handler) {
-        response.head.u.status = TDG_VP_VMCALL_SERVICE_NOT_SUPPORT;
-        VMCALL_DEBUG("Service not supported, please check GUID value\n");
-        goto fail;
+        /* HACK: This is TMP solution and if tdx service is from TDXIO, directly
+         * jump to tdxio service.
+         */
+        if (tdxio_service_init) {
+            tdxio_handle_service(cpu, vmcall);
+            return;
+        }
     }
 
     vsi = tdx_vmcall_service_create_service_item(handler->vsi_size, vmcall);
@@ -2639,12 +2643,6 @@ static void tdx_handle_vmcall(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         break;
     case TDG_VP_VMCALL_SERVICE:
         tdx_handle_vmcall_service(cpu, vmcall);
-
-        /*Need remove*/
-        if (tdx_service_init) {
-            tdx_handle_service(cpu, vmcall);
-        }
-
         break;
     default:
         warn_report("unknown tdg.vp.vmcall type 0x%llx subfunction 0x%llx",

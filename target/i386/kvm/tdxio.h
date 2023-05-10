@@ -365,10 +365,10 @@ typedef struct {
 
 #pragma pack(pop)
 
-int tdx_services_init(void);
-void tdx_handle_service(X86CPU *cpu, struct kvm_tdx_vmcall
+int tdxio_services_init(void);
+void tdxio_handle_service(X86CPU *cpu, struct kvm_tdx_vmcall
                                *vmcall);
 
-extern bool tdx_service_init;
+extern bool tdxio_service_init;
 
 #endif
