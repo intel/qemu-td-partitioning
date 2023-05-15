@@ -247,6 +247,8 @@ struct TdispMgr {
 
     char *devpath;
     QLIST_ENTRY(TdispMgr) list;
+    EventNotifier event_notifier;
+    int eventfd;
 };
 
 struct TdispMgrRequest {

@@ -41,8 +41,6 @@
 
 bool tdxio_service_init = false;
 
-static EventNotifier tdx_tmgr_notifier;
-static int tdx_tmgr_eventfd;
 struct TdispMgrReqList tmreq_list;
 
 static void *tdx_dispatch_serv_thread_fn(void *arg);
@@ -252,11 +250,18 @@ static void *tdx_tm_listener_fn(void *arg)
                 tmgr->session_idx = tinfo.session_idx;
                 tmgr->devpath = strdup(devpath);
 
+                ret = event_notifier_init(&tmgr->event_notifier, false);
+                if (ret) {
+                    DPRINTF("Fail to init event notifier %s\n", mdev_node);
+                    exit(1);
+                }
+                tmgr->eventfd = event_notifier_get_fd(&tmgr->event_notifier);
+
                 DPRINTF("devpath: %s, devid: 0x%x, iommu_id: 0x%x, session_idx: 0x%x\n",
                         tmgr->devpath, tmgr->devid, tmgr->iommu_id, tmgr->session_idx);
 
                 /* Set TDISP MGR request eventfd. */
-                eventfd.fd = tdx_tmgr_eventfd;
+                eventfd.fd = tmgr->eventfd;
                 ret = ioctl(fd, TDISP_MGR_SET_EVENTFD, &eventfd);
                 if (ret) {
                     DPRINTF("Fail to set the eventfd %d on TDISP MGR %s.\n",
@@ -265,7 +270,7 @@ static void *tdx_tm_listener_fn(void *arg)
                 }
 
                 /* Set request eventfd notifier. */
-                qemu_set_fd_handler(tdx_tmgr_eventfd,
+                qemu_set_fd_handler(tmgr->eventfd,
                                     tdx_serv_request_handler, NULL, tmgr);
 
                 qemu_mutex_lock(&listener->mutex);
@@ -287,8 +292,7 @@ static void *tdx_tm_listener_fn(void *arg)
                 }
                 qemu_mutex_unlock(&listener->mutex);
 
-                if (listener->tmgr_num == 0)
-                    qemu_set_fd_handler(tdx_tmgr_eventfd, NULL, NULL, NULL);
+                qemu_set_fd_handler(tmgr->eventfd, NULL, NULL, NULL);
 
                 DPRINTF("Remove TDISP MGR %s num %u\n",
                         tmgr->devpath, listener->tmgr_num);
@@ -1191,7 +1195,7 @@ static void tdx_serv_request_handler(void *opaque)
     struct TdispMgrRequest *tmreq;
     int ret;
 
-    if (!event_notifier_test_and_clear(&tdx_tmgr_notifier)) {
+    if (!event_notifier_test_and_clear(&tmgr->event_notifier)) {
         fprintf(stderr, "Fail to read SPDM event notifier!\n");
         return;
     }
@@ -1514,16 +1518,6 @@ int tdxio_services_init(void)
             fprintf(stderr, "kvm: Failed to initialize SPDM service. %d\n", ret);
             return ret;
         }
-
-        /* Get an eventfd for trigger. */
-        ret = event_notifier_init(&tdx_tmgr_notifier, false);
-        if (ret) {
-            fprintf(stderr, "kvm: Failed to initialize trigger eventfd notifier.");
-            return ret;
-        }
-
-        tdx_tmgr_eventfd = event_notifier_get_fd(&tdx_tmgr_notifier);
-        DPRINTF("tdx_tmgr_eventfd %d\n", tdx_tmgr_eventfd);
 
         ret = tdx_tdisp_mgr_listener_init(&tmgr_listener);
         if (ret < 0) {
