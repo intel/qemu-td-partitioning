@@ -5799,6 +5799,11 @@ static gint compare_string(gconstpointer a, gconstpointer b)
     return g_strcmp0(a, b);
 }
 
+bool is_feature_removed(const char *feat_name)
+{
+    return g_list_find_custom(minus_features, feat_name, compare_string);
+}
+
 /* Parse "+feature,-feature,feature=foo" CPU feature string
  */
 static void x86_cpu_parse_featurestr(const char *typename, char *features,

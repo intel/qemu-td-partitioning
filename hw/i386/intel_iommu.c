@@ -6721,7 +6721,8 @@ VTDAddressSpace *vtd_find_add_as(IntelIOMMUState *s, PCIBus *bus,
 static bool vtd_check_hw_info(IntelIOMMUState *s,
                                    struct iommu_hw_info_vtd *vtd)
 {
-    return !(((s->host_cap ^ vtd->cap_reg) & VTD_CAP_MASK & s->host_cap) ||
+    return !((s->aw_bits != ((vtd->cap_reg >> 16) & 0x3fULL)) ||
+             ((s->host_cap ^ vtd->cap_reg) & VTD_CAP_MASK & s->host_cap) ||
              ((s->host_ecap ^ vtd->ecap_reg) & VTD_ECAP_MASK & s->host_ecap) ||
              (VTD_GET_PSS(s->host_ecap) > VTD_GET_PSS(vtd->ecap_reg)));
 }
@@ -6733,8 +6734,8 @@ static bool vtd_sync_hw_info(IntelIOMMUState *s,
     uint64_t cap, ecap, addr_width, pasid_bits;
 
     addr_width = (vtd->cap_reg >> 16) & 0x3fULL;
-    if (s->aw_bits != addr_width) {
-        error_report("User aw-bits: %u != host address width: %lu",
+    if (s->aw_bits > addr_width) {
+        error_report("User aw-bits: %u > host address width: %lu",
                       s->aw_bits, addr_width);
         return false;
     }
@@ -6997,39 +6998,60 @@ static void vtd_iommu_replay(IOMMUMemoryRegion *iommu_mr, IOMMUNotifier *n)
     return;
 }
 
-static void get_supported_aw(IntelIOMMUState *s)
+static bool get_supported_aw(IntelIOMMUState *s)
 {
     static char cmdline[1024];
     uint64_t feat;
+    uint8_t haw;
     FILE *fp;
 
     feat = x86_cpu_get_supported_feature_word(FEAT_7_0_ECX, false);
     if (feat & CPUID_7_0_ECX_LA57) {
-        s->aw_bits = VTD_HOST_AW_57BIT;
+        haw = VTD_HOST_AW_57BIT;
     } else {
         uint32_t eax, ebx, ecx, edx;
 
         host_cpuid(0x80000008, 0, &eax, &ebx, &ecx, &edx);
-        s->aw_bits = (eax >> 8) & 0xff;
+        haw = (eax >> 8) & 0xff;
     }
+
+    if (s->aw_bits > haw) {
+        error_report("User aw-bits: %u > host address width: %u\n",
+                     s->aw_bits, haw);
+        return false;
+    }
+
+    if (s->aw_bits == VTD_HOST_AW_48BIT &&
+        haw == VTD_HOST_AW_57BIT && !is_feature_removed("la57")) {
+        printf("\niommu: User aw-bits: %u, host address width: %u\n",
+		s->aw_bits, haw);
+        printf("Please add no5lvl in guest cmdline to make SVM work.\n\n");
+        return true;
+    }
+
+    if (s->aw_bits != VTD_HOST_AW_57BIT)
+        return true;
 
     fp = fopen("/proc/cmdline", "r");
     if (!fp) {
-        return;
+        return false;
     }
 
     if (!fgets(cmdline, sizeof(cmdline), fp)) {
         fclose(fp);
-        return;
+        return false;
     }
     fclose(fp);
 
-    if (strstr(cmdline, "no5lvl") && s->aw_bits == VTD_HOST_AW_57BIT) {
+    if (strstr(cmdline, "no5lvl")) {
         s->aw_bits = VTD_HOST_AW_48BIT;
-        printf("iommu: Detected no5lvl, fallback to 48bit aw-bits!\n");
+        printf("\niommu: Detected no5lvl in host cmdline, fallback to 48bit aw-bits!\n\n");
+
+        if (!is_feature_removed("la57"))
+            printf("Please add no5lvl in guest cmdline to make SVM work.\n\n");
     }
 
-    return;
+    return true;
 }
 
 static void vtd_cap_init(IntelIOMMUState *s)
@@ -7042,8 +7064,6 @@ static void vtd_cap_init(IntelIOMMUState *s)
     if (s->dma_drain) {
         s->cap |= VTD_CAP_DRAIN;
     }
-
-    get_supported_aw(s);
 
     if (s->dma_translation) {
         if (s->aw_bits >= VTD_HOST_AW_39BIT) {
@@ -7287,13 +7307,16 @@ static bool vtd_decide_config(IntelIOMMUState *s, Error **errp)
         }
     }
 
-    /* Currently only address widths supported are 39 and 48 bits */
     if ((s->aw_bits != VTD_HOST_AW_39BIT) &&
-        (s->aw_bits != VTD_HOST_AW_48BIT)) {
-        error_setg(errp, "Supported values for aw-bits are: %d, %d",
-                   VTD_HOST_AW_39BIT, VTD_HOST_AW_48BIT);
+        (s->aw_bits != VTD_HOST_AW_48BIT) &&
+        (s->aw_bits != VTD_HOST_AW_57BIT)) {
+        error_setg(errp, "Supported values for aw-bits are: %d, %d, %d",
+                   VTD_HOST_AW_39BIT, VTD_HOST_AW_48BIT, VTD_HOST_AW_57BIT);
         return false;
     }
+
+    if (!get_supported_aw(s))
+        return false;
 
     if (s->scalable_mode && !s->dma_drain) {
         error_setg(errp, "Need to set dma_drain for scalable mode");
