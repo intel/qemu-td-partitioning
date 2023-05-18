@@ -619,7 +619,7 @@ typedef enum X86Seg {
 
 /* CPUID feature bits available in XSS */
 #define CPUID_XSTATE_XSS_MASK    (XSTATE_ARCH_LBR_MASK | XSTATE_CET_U_MASK | \
-                                  XSTATE_CET_S_MASK)
+                                  XSTATE_CET_S_MASK | XSTATE_PASID_MASK)
 
 /* CPUID feature words */
 typedef enum FeatureWord {
