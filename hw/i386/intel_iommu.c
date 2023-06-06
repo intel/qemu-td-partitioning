@@ -6268,7 +6268,7 @@ static Property vtd_properties[] = {
                             ON_OFF_AUTO_AUTO),
     DEFINE_PROP_BOOL("x-buggy-eim", IntelIOMMUState, buggy_eim, false),
     DEFINE_PROP_UINT8("aw-bits", IntelIOMMUState, aw_bits,
-                      VTD_HOST_ADDRESS_WIDTH),
+                      VTD_INVALID_ADDRESS_WIDTH),
     DEFINE_PROP_BOOL("caching-mode", IntelIOMMUState, caching_mode, FALSE),
     DEFINE_PROP_STRING("x-scalable-mode", IntelIOMMUState, scalable_mode_str),
     DEFINE_PROP_BOOL("snoop-control", IntelIOMMUState, snoop_control, false),
@@ -7015,7 +7015,7 @@ static bool get_supported_aw(IntelIOMMUState *s)
         haw = (eax >> 8) & 0xff;
     }
 
-    if (s->aw_bits > haw) {
+    if (s->aw_bits != VTD_INVALID_ADDRESS_WIDTH && s->aw_bits > haw) {
         error_report("User aw-bits: %u > host address width: %u\n",
                      s->aw_bits, haw);
         return false;
@@ -7028,6 +7028,9 @@ static bool get_supported_aw(IntelIOMMUState *s)
         printf("Please add no5lvl in guest cmdline to make SVM work.\n\n");
         return true;
     }
+
+    if (s->aw_bits == VTD_INVALID_ADDRESS_WIDTH)
+        s->aw_bits = haw;
 
     if (s->aw_bits != VTD_HOST_AW_57BIT)
         return true;
@@ -7307,7 +7310,8 @@ static bool vtd_decide_config(IntelIOMMUState *s, Error **errp)
         }
     }
 
-    if ((s->aw_bits != VTD_HOST_AW_39BIT) &&
+    if ((s->aw_bits != VTD_INVALID_ADDRESS_WIDTH) &&
+        (s->aw_bits != VTD_HOST_AW_39BIT) &&
         (s->aw_bits != VTD_HOST_AW_48BIT) &&
         (s->aw_bits != VTD_HOST_AW_57BIT)) {
         error_setg(errp, "Supported values for aw-bits are: %d, %d, %d",
