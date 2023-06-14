@@ -5252,12 +5252,20 @@ static void vtd_pasid_free_idx(IntelIOMMUState *s, uint32_t idx)
 }
 
 /* Must be called with IOMMU lock held */
-static VTDPASIDStoreEntry *vtd_pasid_alloc_idx(IntelIOMMUState *s)
+static VTDPASIDStoreEntry *vtd_pasid_alloc_idx(IntelIOMMUState *s, bool new_slot)
 {
     uint32_t idx;
     VTDPASIDStoreEntry *entry;
 
     idx = s->next_idx;
+
+    if (new_slot) {
+        idx = ((idx / 100 + 1) * 100) & VTD_HPASID_MAX;
+        /* In kernel iommufd, the pasid limitation is 1000 per VM */
+        if (idx  > 1000)
+            return NULL;
+    }
+
     while (vtd_pasid_find_by_idx(s, idx)) {
         if (idx == VTD_HPASID_MAX) {
             idx = VTD_HPASID_MIN;
@@ -5291,33 +5299,48 @@ static int __vtd_alloc_host_pasid(IntelIOMMUState *s,
 static int vtd_request_pasid_alloc(IntelIOMMUState *s, uint32_t *pasid)
 {
     int ret;
+    int retry_count = 0;
+    int pasid_slot_num = 0;
+    bool new_slot = false;
     VTDPASIDStoreEntry *entry = NULL;
 
     vtd_iommu_lock(s);
 
-    entry = vtd_pasid_alloc_idx(s);
+retry:
+    entry = vtd_pasid_alloc_idx(s, new_slot);
+    new_slot = false;
     if (!entry) {
         ret = -ENOSPC;
         error_report("vtd_pasid_alloc_idx fail!\n");
         goto out;
     } else {
         *pasid = entry->gpasid;
+        printf("%s: Allocated guest pasid = %u\n", __func__, *pasid);
     }
 
     ret = __vtd_alloc_host_pasid(s, !s->non_identical_pasid, pasid);
-    if (ret) {
-        goto out;
+    if (ret == -ENODEV) {
+        if (retry_count++ < 50)
+            goto retry;
+
+        retry_count = 0;
+        new_slot = true;
+        if (pasid_slot_num++ == 8) {
+            error_report("%s: IOMMU_ALLOC_PASID failed. Something is broken!", __func__);
+            goto out;
+        }
+        goto retry;
     }
 
     if (!s->non_identical_pasid) {
-        printf("Allocated identical PASID g/h: %u/%u\n", *pasid, *pasid);
+        printf("Use identical PASID g/h: %u/%u\n", *pasid, *pasid);
         goto out;
     }
 
     if (entry) {
         entry->hpasid = *pasid;
         *pasid = entry->gpasid;
-        printf("Alloc PASID g/h: %u/%u\n", entry->gpasid, entry->hpasid);
+        printf("Allocated PASID g/h: %u/%u\n", entry->gpasid, entry->hpasid);
     }
 out:
     vtd_iommu_unlock(s);
@@ -7477,7 +7500,7 @@ static void vtd_realize(DeviceState *dev, Error **errp)
         VTDPASIDStoreEntry *entry;
 
         vtd_iommu_lock(s);
-        entry = vtd_pasid_alloc_idx(s);
+        entry = vtd_pasid_alloc_idx(s, false);
         if (entry && entry->gpasid == 0) {
             entry->hpasid = 0;
         } else {
