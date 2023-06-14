@@ -1814,6 +1814,31 @@ void host_cpuid(uint32_t function, uint32_t count,
         *edx = vec[3];
 }
 
+uint32_t host_cpuid_reg(uint32_t function,
+                        uint32_t index, int reg)
+{
+    uint32_t eax, ebx, ecx, edx;
+    uint32_t ret = 0;
+
+    host_cpuid(function, index, &eax, &ebx, &ecx, &edx);
+
+    switch (reg) {
+    case R_EAX:
+        ret |= eax;
+        break;
+    case R_EBX:
+        ret |= ebx;
+        break;
+    case R_ECX:
+        ret |= ecx;
+        break;
+    case R_EDX:
+        ret |= edx;
+        break;
+    }
+    return ret;
+}
+
 /* CPU class name definitions: */
 
 /* Return type name for a given CPU model name
@@ -7503,6 +7528,17 @@ static void x86_cpu_hyperv_realize(X86CPU *cpu)
     cpu->hyperv_limits[2] = 0;
 }
 
+static bool is_sierra_forest_cpu_model(void)
+{
+    int64_t value;
+    uint32_t cpuid_version = host_cpuid_reg(1, 0, R_EAX);
+
+    value = (cpuid_version >> 4) & 0xf;
+    value |= ((cpuid_version >> 16) & 0xf) << 4;
+
+    return (value == 0xaf);
+}
+
 static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
 {
     CPUState *cs = CPU(dev);
@@ -7667,6 +7703,9 @@ static void x86_cpu_realizefn(DeviceState *dev, Error **errp)
              * e.g. physical address bits is fixed to 0x34.
              */
             cpu->phys_bits = TDX_PHYS_ADDR_BITS;
+            if (is_sierra_forest_cpu_model()) {
+                cpu->phys_bits = 48;
+            }
         }
 #endif
     } else {

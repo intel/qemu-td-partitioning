@@ -327,31 +327,6 @@ bool is_tdx_vm(void)
     return !!tdx_guest;
 }
 
-static inline uint32_t host_cpuid_reg(uint32_t function,
-                                      uint32_t index, int reg)
-{
-    uint32_t eax, ebx, ecx, edx;
-    uint32_t ret = 0;
-
-    host_cpuid(function, index, &eax, &ebx, &ecx, &edx);
-
-    switch (reg) {
-    case R_EAX:
-        ret |= eax;
-        break;
-    case R_EBX:
-        ret |= ebx;
-        break;
-    case R_ECX:
-        ret |= ecx;
-        break;
-    case R_EDX:
-        ret |= edx;
-        break;
-    }
-    return ret;
-}
-
 static inline uint32_t tdx_cap_cpuid_config(uint32_t function,
                                             uint32_t index, int reg)
 {
