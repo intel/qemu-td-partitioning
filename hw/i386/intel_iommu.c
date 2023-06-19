@@ -5307,15 +5307,17 @@ static int vtd_request_pasid_alloc(IntelIOMMUState *s, uint32_t *pasid)
     vtd_iommu_lock(s);
 
 retry:
-    entry = vtd_pasid_alloc_idx(s, new_slot);
-    new_slot = false;
-    if (!entry) {
-        ret = -ENOSPC;
-        error_report("vtd_pasid_alloc_idx fail!\n");
-        goto out;
-    } else {
-        *pasid = entry->gpasid;
-        printf("%s: Allocated guest pasid = %u\n", __func__, *pasid);
+    if (s->non_identical_pasid) {
+        entry = vtd_pasid_alloc_idx(s, new_slot);
+        new_slot = false;
+        if (!entry) {
+            ret = -ENOSPC;
+            error_report("vtd_pasid_alloc_idx fail!\n");
+            goto out;
+        } else {
+            *pasid = entry->gpasid;
+            printf("%s: Allocated guest pasid = %u\n", __func__, *pasid);
+        }
     }
 
     ret = __vtd_alloc_host_pasid(s, !s->non_identical_pasid, pasid);
@@ -5323,10 +5325,15 @@ retry:
         if (retry_count++ < 50)
             goto retry;
 
+        if (!s->non_identical_pasid) {
+            error_report("%s: Identical: IOMMU_ALLOC_PASID failed. Something is broken!", __func__);
+            goto out;
+        }
+
         retry_count = 0;
         new_slot = true;
         if (pasid_slot_num++ == 8) {
-            error_report("%s: IOMMU_ALLOC_PASID failed. Something is broken!", __func__);
+            error_report("%s: Non-Identical: IOMMU_ALLOC_PASID failed. Something is broken!", __func__);
             goto out;
         }
         goto retry;
