@@ -1134,7 +1134,7 @@ FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
             NULL, "amx-avx512", "avx-vnni-int16", NULL,
             NULL, NULL, "prefetchiti", NULL,
             "avx512-bf16-ne", NULL, NULL, NULL,
-            NULL, NULL, NULL, NULL,
+            "amx-sparse", NULL, NULL, NULL,
             NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL,
         },

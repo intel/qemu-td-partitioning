@@ -1020,6 +1020,8 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_1_EDX_PREFETCHITI       (1U << 14)
 /* AVX512 BF16 NE Instructions */
 #define CPUID_7_1_EDX_AVX512_BF16_NE    (1U << 16)
+/* AMX SPARSE Instructions */
+#define CPUID_7_1_EDX_AMX_SPARSE        (1U << 20)
 
 /* Do not exhibit MXCSR Configuration Dependent Timing (MCDT) behavior */
 #define CPUID_7_2_EDX_MCDT_NO           (1U << 5)
