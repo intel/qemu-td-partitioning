@@ -1117,7 +1117,7 @@ FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
             NULL, NULL, NULL, NULL,
             NULL, "amx-fp16", NULL, "avx-ifma",
             NULL, NULL, "lam", "msrlist",
-            NULL, NULL, NULL, NULL,
+            "avx512-mediax", NULL, NULL, NULL,
         },
         .cpuid = {
             .eax = 7,

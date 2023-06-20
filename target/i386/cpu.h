@@ -995,6 +995,8 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_1_EAX_AVX_IFMA          (1U << 23)
 /* Linear Address Masking */
 #define CPUID_7_1_EAX_LAM               (1U << 26)
+/* AVX512 MEDIAX Instructions*/
+#define CPUID_7_1_EAX_AVX512_MEDIAX     (1U << 28)
 
 /* AVX512 VNNI INT8 Instructions */
 #define CPUID_7_1_EDX_AVX512_VNNI_INT8  (1U << 2)
