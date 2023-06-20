@@ -666,6 +666,7 @@ typedef enum FeatureWord {
     FEAT_7_1_EDX,       /* CPUID[EAX=7,ECX=1].EDX */
     FEAT_7_2_EDX,       /* CPUID[EAX=7,ECX=2].EDX */
     FEAT_7_1_EBX,       /* CPUID[EAX=7,ECX=1].EBX */
+    FEAT_7_1_ECX,       /* CPUID[EAX=7,ECX=1].ECX */
     FEATURE_WORDS,
 } FeatureWord;
 
@@ -1007,6 +1008,9 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_1_EBX_AVX512_RAO_FP     (1U << 30)
 /* AVX RAO FP Instructions */
 #define CPUID_7_1_EBX_AVX_RAO_FP        (1U << 31)
+
+/* AMX FP8 Instructions */
+#define CPUID_7_1_ECX_AMX_FP8           (1U << 3)
 
 /* AVX512 VNNI FP16 Instructions */
 #define CPUID_7_1_EDX_AVX512_VNNI_FP16  (1U << 1)
