@@ -994,6 +994,8 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 /* Linear Address Masking */
 #define CPUID_7_1_EAX_LAM               (1U << 26)
 
+/* AVX512 VNNI INT8 Instructions */
+#define CPUID_7_1_EDX_AVX512_VNNI_INT8  (1U << 2)
 /* Support for VPDPB[SU,UU,SS]D[,S] */
 #define CPUID_7_1_EDX_AVX_VNNI_INT8     (1U << 4)
 /* AVX NE CONVERT Instructions */
