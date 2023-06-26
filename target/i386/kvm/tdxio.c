@@ -1533,8 +1533,14 @@ int tdxio_services_init(void)
     return ret;
 }
 
+static hwaddr tdx_shared_bit(X86CPU *cpu)
+{
+    return (cpu->phys_bits > 48) ? BIT_ULL(51) : BIT_ULL(47);
+}
+
 void tdxio_handle_service(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 {
+    uint64_t gpa_mask = ~tdx_shared_bit(cpu);
     struct TdxEvent *event;
     uint32_t cmd_len, resp_len;
     hwaddr cmd_gpa, resp_gpa;
@@ -1543,8 +1549,8 @@ void tdxio_handle_service(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
 
     vmcall->status_code = TDG_VP_VMCALL_INVALID_OPERAND;
 
-    cmd_gpa = vmcall->in_r12;
-    resp_gpa = vmcall->in_r13;
+    cmd_gpa = vmcall->in_r12 & gpa_mask;
+    resp_gpa = vmcall->in_r13 & gpa_mask;
 
     /* alloc & fill cmd buffer */
     cmd_len = sizeof(struct tdx_serv_cmd);
