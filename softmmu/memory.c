@@ -1706,6 +1706,7 @@ void memory_region_gmem_create(MemoryRegion *mr)
     }
     rb->gmem_fd = fd;
     rb->flags |= RAM_DEFAULT_PRIVATE;
+    rb->cgs_bmap = bitmap_new(rb->max_length >> TARGET_PAGE_BITS);
 }
 
 #endif
