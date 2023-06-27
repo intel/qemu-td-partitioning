@@ -208,17 +208,17 @@ static void *tdx_tm_listener_fn(void *arg)
                 char node[MAX_PATH_LEN - 10];
                 char *tmp;
 
-               fd = open(mdev_node, O_RDONLY);
+                fd = open(mdev_node, O_RDONLY);
                 if (fd < 0) {
                     DPRINTF("Fail to open mdev_node %s\n", mdev_node);
-                    exit(1);
+                    continue;
                 }
 
                 memset(node, 0, MAX_PATH_LEN - 10);
                 ret = read(fd, node, MAX_PATH_LEN - 10);
                 if (ret < 0) {
                     DPRINTF("Fail to read mdev_node %s\n", mdev_node);
-                    exit(1);
+                    continue;
                 }
                 sprintf(cdev_node, "/dev/char/%s", node);
                 close(fd);
@@ -233,7 +233,7 @@ static void *tdx_tm_listener_fn(void *arg)
                 fd = open(cdev_node, O_RDONLY);
                 if (fd < 0) {
                     DPRINTF("Fail to open cdev_node %s\n", cdev_node);
-                    exit(1);
+                    continue;
                 }
 
                 tmgr = g_malloc0(sizeof(struct TdispMgr));
@@ -242,7 +242,8 @@ static void *tdx_tm_listener_fn(void *arg)
                 ret = ioctl(fd, TDISP_MGR_GET_INFO, &tinfo);
                 if (ret) {
                     DPRINTF("Fail to get mgr info %s\n", cdev_node);
-                    exit(1);
+                    g_free(tmgr);
+                    continue;
                 }
 
                 tmgr->devid = tinfo.devid;
@@ -253,7 +254,9 @@ static void *tdx_tm_listener_fn(void *arg)
                 ret = event_notifier_init(&tmgr->event_notifier, false);
                 if (ret) {
                     DPRINTF("Fail to init event notifier %s\n", mdev_node);
-                    exit(1);
+                    g_free(tmgr->devpath);
+                    g_free(tmgr);
+                    continue;
                 }
                 tmgr->eventfd = event_notifier_get_fd(&tmgr->event_notifier);
 
@@ -266,7 +269,9 @@ static void *tdx_tm_listener_fn(void *arg)
                 if (ret) {
                     DPRINTF("Fail to set the eventfd %d on TDISP MGR %s.\n",
                             eventfd.fd, tmgr->devpath);
-                    exit(1);
+                    g_free(tmgr->devpath);
+                    g_free(tmgr);
+                    continue;
                 }
 
                 /* Set request eventfd notifier. */
@@ -281,16 +286,23 @@ static void *tdx_tm_listener_fn(void *arg)
                 DPRINTF("Add TDISP MGR %s fd %d num %u\n",
                         tmgr->devpath, fd, listener->tmgr_num);
             } else if (!strcmp(action, "remove")) {
+                bool found = false;
+
                 /* Remove from the listener device list. */
                 qemu_mutex_lock(&listener->mutex);
                 QLIST_FOREACH(tmgr, &listener->tmgr_list, list) {
                     if (!strcmp(tmgr->devpath, devpath)) {
+                        found = true;
                         listener->tmgr_num--;
                         QLIST_REMOVE(tmgr, list);
                         break;
                     }
                 }
                 qemu_mutex_unlock(&listener->mutex);
+
+                if (!found) {
+                    continue;
+                }
 
                 qemu_set_fd_handler(tmgr->eventfd, NULL, NULL, NULL);
 
