@@ -11,9 +11,23 @@
  *
  */
 
+#include "qemu/osdep.h"
+#include "qemu/error-report.h"
+#include "qemu-file.h"
+#include "qapi/qapi-types-migration.h"
+#include "options.h"
 #include "cgs.h"
 
 static CgsMig cgs_mig;
+
+#define cgs_check_error(f, ret)                                  \
+do {                                                             \
+    if (ret < 0) {                                               \
+        error_report("%s: failed: %s", __func__, strerror(ret)); \
+        qemu_file_set_error(f, ret);                             \
+        return ret;                                              \
+    }                                                            \
+} while (0)
 
 bool cgs_mig_is_ready(void)
 {
@@ -27,4 +41,24 @@ bool cgs_mig_is_ready(void)
     }
 
     return cgs_mig.is_ready();
+}
+
+int cgs_mig_savevm_state_setup(QEMUFile *f)
+{
+    int ret;
+
+    if (!cgs_mig.savevm_state_setup) {
+        return 0;
+    }
+
+    if (migrate_multifd() || migrate_postcopy_ram()) {
+        error_report("multifd and postcopy not supported by cgs yet");
+        qemu_file_set_error(f, -EINVAL);
+        return -EINVAL;
+    }
+
+    ret = cgs_mig.savevm_state_setup();
+    cgs_check_error(f, ret);
+
+    return ret;
 }

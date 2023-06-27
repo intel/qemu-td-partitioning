@@ -38,6 +38,7 @@
 #include "migration/global_state.h"
 #include "migration/channel-block.h"
 #include "ram.h"
+#include "cgs.h"
 #include "qemu-file.h"
 #include "savevm.h"
 #include "postcopy-ram.h"
@@ -1246,6 +1247,11 @@ void qemu_savevm_state_setup(QEMUFile *f)
     json_writer_start_array(ms->vmdesc, "devices");
 
     trace_savevm_state_setup();
+
+    if (cgs_mig_savevm_state_setup(f)) {
+        return;
+    }
+
     QTAILQ_FOREACH(se, &savevm_state.handlers, entry) {
         if (se->vmsd && se->vmsd->early_setup) {
             ret = vmstate_save(f, se, ms->vmdesc);
