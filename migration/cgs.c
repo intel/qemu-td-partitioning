@@ -16,6 +16,7 @@
 #include "qemu-file.h"
 #include "qapi/qapi-types-migration.h"
 #include "options.h"
+#include "savevm.h"
 #include "cgs.h"
 
 static CgsMig cgs_mig;
@@ -59,6 +60,29 @@ int cgs_mig_savevm_state_setup(QEMUFile *f)
 
     ret = cgs_mig.savevm_state_setup();
     cgs_check_error(f, ret);
+
+    return ret;
+}
+
+int cgs_mig_savevm_state_start(QEMUFile *f)
+{
+    int ret;
+
+    if (!cgs_mig.savevm_state_start) {
+        return 0;
+    }
+
+    qemu_put_byte(f, QEMU_VM_SECTION_CGS_START);
+    ret = cgs_mig.savevm_state_start(f);
+    cgs_check_error(f, ret);
+    /*
+     * Flush the initial message (i.e. QEMU_VM_SECTION_CGS_START + vendor
+     * specific data if there is) immediately to have the destinatino side
+     * kick off the process as soon as possible.
+     */
+    if (!ret) {
+        qemu_fflush(f);
+    }
 
     return ret;
 }

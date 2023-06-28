@@ -1252,6 +1252,10 @@ void qemu_savevm_state_setup(QEMUFile *f)
         return;
     }
 
+    if (cgs_mig_savevm_state_start(f)) {
+        return;
+    }
+
     QTAILQ_FOREACH(se, &savevm_state.handlers, entry) {
         if (se->vmsd && se->vmsd->early_setup) {
             ret = vmstate_save(f, se, ms->vmdesc);
