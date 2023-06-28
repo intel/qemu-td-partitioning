@@ -17,6 +17,7 @@
 #include "qapi/qapi-types-migration.h"
 #include "options.h"
 #include "savevm.h"
+#include "ram.h"
 #include "cgs.h"
 
 static CgsMig cgs_mig;
@@ -85,4 +86,26 @@ int cgs_mig_savevm_state_start(QEMUFile *f)
     }
 
     return ret;
+}
+
+/* Return number of bytes sent or the error value (< 0) */
+long cgs_mig_savevm_state_ram(QEMUFile *f, RAMBlock *block,
+                              ram_addr_t offset, hwaddr gpa, void *pss_context)
+{
+    long hdr_bytes, ret;
+
+    if (!cgs_mig.savevm_state_ram) {
+        return 0;
+    }
+
+    hdr_bytes = ram_save_cgs_ram_header(f, block, offset, pss_context);
+    ret = cgs_mig.savevm_state_ram(f, gpa);
+    /*
+     * Returning 0 isn't expected. Either succeed with returning bytes of data
+     * written to the file or error with a negative error code returned.
+     */
+    assert(ret);
+    cgs_check_error(f, ret);
+
+    return hdr_bytes + ret;
 }

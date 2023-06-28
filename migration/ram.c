@@ -88,7 +88,7 @@
 /* 0x80 is reserved in qemu-file.h for RAM_SAVE_FLAG_HOOK */
 #define RAM_SAVE_FLAG_COMPRESS_PAGE    0x100
 #define RAM_SAVE_FLAG_MULTIFD_FLUSH    0x200
-/* We can't use any flag that is bigger than 0x200 */
+#define RAM_SAVE_FLAG_CGS_STATE        0x400
 
 XBZRLECacheStats xbzrle_counters;
 
@@ -1077,6 +1077,13 @@ static void migration_bitmap_sync_precopy(RAMState *rs, bool last_stage)
     if (precopy_notify(PRECOPY_NOTIFY_AFTER_BITMAP_SYNC, &local_err)) {
         error_report_err(local_err);
     }
+}
+
+size_t ram_save_cgs_ram_header(QEMUFile *f, RAMBlock *block,
+                               ram_addr_t offset, void *pss_context)
+{
+    return save_page_header((PageSearchStatus *)pss_context, f,
+                            block, offset | RAM_SAVE_FLAG_CGS_STATE);
 }
 
 void ram_release_page(const char *rbname, uint64_t offset)
