@@ -126,3 +126,17 @@ long cgs_ram_save_start_epoch(QEMUFile *f)
     /* 8 bytes for the cgs header */
     return ret + 8;
 }
+
+int cgs_mig_savevm_state_pause(QEMUFile *f)
+{
+    int ret;
+
+    if (!cgs_mig.savevm_state_pause) {
+        return 0;
+    }
+
+    ret = cgs_mig.savevm_state_pause();
+    cgs_check_error(f, ret);
+
+    return ret;
+}

@@ -2297,6 +2297,19 @@ static int migration_maybe_pause(MigrationState *s,
     return s->state == new_state ? 0 : -EINVAL;
 }
 
+static int migration_pause(MigrationState *s, int *current_active_state,
+                           int new_state)
+{
+    int ret;
+
+    ret = migration_maybe_pause(s, current_active_state, new_state);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return cgs_mig_savevm_state_pause(s->to_dst_file);
+}
+
 /**
  * migration_completion: Used by migration_thread when there's not much left.
  *   The caller 'breaks' the loop when this returns.
@@ -2322,9 +2335,10 @@ static void migration_completion(MigrationState *s)
         ret = vm_stop_force_state(RUN_STATE_FINISH_MIGRATE);
         trace_migration_completion_vm_stop(ret);
         if (ret >= 0) {
-            ret = migration_maybe_pause(s, &current_active_state,
-                                        MIGRATION_STATUS_DEVICE);
+            ret = migration_pause(s, &current_active_state,
+                                  MIGRATION_STATUS_DEVICE);
         }
+
         if (ret >= 0) {
             /*
              * Inactivate disks except in COLO, and track that we
