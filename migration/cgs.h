@@ -28,6 +28,7 @@ typedef struct CgsMig {
     void (*savevm_state_cleanup)(void);
     int (*loadvm_state_setup)(void);
     int (*loadvm_state)(QEMUFile *f);
+    void (*loadvm_state_cleanup)(void);
 } CgsMig;
 
 bool cgs_mig_is_ready(void);
@@ -43,5 +44,6 @@ int cgs_mig_savevm_state_ram_abort(void);
 void cgs_mig_savevm_state_cleanup(void);
 int cgs_mig_loadvm_state_setup(QEMUFile *f);
 int cgs_mig_loadvm_state(QEMUFile *f);
+void cgs_mig_loadvm_state_cleanup(void);
 
 #endif
