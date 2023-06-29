@@ -58,6 +58,7 @@
 #include "qemu/iov.h"
 #include "multifd.h"
 #include "sysemu/runstate.h"
+#include "sysemu/kvm.h"
 #include "options.h"
 
 #include "hw/boards.h" /* for machine_dump_guest_core() */
@@ -92,6 +93,8 @@
 
 XBZRLECacheStats xbzrle_counters;
 
+#define CGS_PRIVATE_GPA_INVALID (~0UL)
+
 /* used by the search for pages to send */
 struct PageSearchStatus {
     /* The migration channel used for a specific host page */
@@ -102,6 +105,8 @@ struct PageSearchStatus {
     RAMBlock    *block;
     /* Current page to search from */
     unsigned long page;
+    /* Guest-physical address of the current page if it is private */
+    hwaddr cgs_private_gpa;
     /* Set once we wrap around */
     bool         complete_round;
     /* Whether we're sending a host page */
@@ -461,6 +466,7 @@ static void pss_init(PageSearchStatus *pss, RAMBlock *rb, ram_addr_t page)
     pss->block = rb;
     pss->page = page;
     pss->complete_round = false;
+    pss->cgs_private_gpa = CGS_PRIVATE_GPA_INVALID;
 }
 
 /*
@@ -679,6 +685,36 @@ static int save_xbzrle_page(RAMState *rs, PageSearchStatus *pss,
     return 1;
 }
 
+static hwaddr ram_get_private_gpa(RAMBlock *rb, unsigned long page)
+{
+    int ret;
+    ram_addr_t offset = ((ram_addr_t)page) << TARGET_PAGE_BITS;
+    hwaddr gpa;
+
+    /* ROM devices contain unencrypted data */
+    if (migrate_ram_is_ignored(rb) ||
+        memory_region_is_romd(rb->mr) ||
+        memory_region_is_rom(rb->mr) ||
+        !memory_region_is_ram(rb->mr) ||
+        !rb->cgs_bmap ||
+        !test_bit(page, rb->cgs_bmap)) {
+        return CGS_PRIVATE_GPA_INVALID;
+    }
+
+    if (offset >= rb->used_length) {
+        return CGS_PRIVATE_GPA_INVALID;
+    }
+
+    ret = kvm_physical_memory_addr_from_host(kvm_state, rb->host + offset,
+                                             &gpa);
+    if (!ret) {
+        error_report("failed to finf gpa, page=%lx", page);
+        return CGS_PRIVATE_GPA_INVALID;
+    }
+
+    return gpa;
+}
+
 /**
  * pss_find_next_dirty: find the next dirty page of current ramblock
  *
@@ -712,6 +748,7 @@ static void pss_find_next_dirty(PageSearchStatus *pss)
     }
 
     pss->page = find_next_bit(bitmap, size, pss->page);
+    pss->cgs_private_gpa = ram_get_private_gpa(pss->block, pss->page);
 }
 
 static void migration_clear_memory_region_dirty_bitmap(RAMBlock *rb,
