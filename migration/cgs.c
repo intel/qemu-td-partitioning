@@ -26,7 +26,9 @@ static CgsMig cgs_mig;
 do {                                                             \
     if (ret < 0) {                                               \
         error_report("%s: failed: %s", __func__, strerror(ret)); \
-        qemu_file_set_error(f, ret);                             \
+        if (f) {                                                 \
+            qemu_file_set_error(f, ret);                         \
+        }                                                        \
         return ret;                                              \
     }                                                            \
 } while (0)
@@ -152,6 +154,21 @@ int cgs_mig_savevm_state_end(QEMUFile *f)
     qemu_put_byte(f, QEMU_VM_SECTION_CGS_END);
     ret = cgs_mig.savevm_state_end(f);
     cgs_check_error(f, ret);
+
+    return ret;
+}
+
+/* gfn_end indicates the last private page that has been migrated. */
+int cgs_mig_savevm_state_ram_abort(void)
+{
+    int ret;
+
+    if (!cgs_mig.savevm_state_ram_abort) {
+        return 0;
+    }
+
+    ret = cgs_mig.savevm_state_ram_abort();
+    cgs_check_error(NULL, ret);
 
     return ret;
 }
