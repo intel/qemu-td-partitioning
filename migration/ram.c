@@ -111,7 +111,9 @@ struct PageSearchStatus {
     hwaddr cgs_private_gpa;
     /* Set once we wrap around */
     bool         complete_round;
-    /* Whether we're sending a host page */
+    /* Used by cgs migration and set to request for the start of a new epoch */
+    bool cgs_start_epoch;
+     /* Whether we're sending a host page */
     bool          host_page_sending;
     /* The start/end of current host page.  Invalid if host_page_sending==false */
     unsigned long host_page_start;
@@ -372,7 +374,7 @@ struct RAMState {
     bool xbzrle_started;
     /* Are we on the last stage of migration */
     bool last_stage;
-    /* compression statistics since the beginning of the period */
+   /* compression statistics since the beginning of the period */
     /* amount of count that no free thread to compress data */
     uint64_t compress_thread_busy_prev;
     /* amount bytes after compression */
@@ -1433,6 +1435,7 @@ static int find_dirty_block(RAMState *rs, PageSearchStatus *pss)
             pss->block = QLIST_FIRST_RCU(&ram_list.blocks);
             /* Flag that we've looped */
             pss->complete_round = true;
+            pss->cgs_start_epoch = true;
             /* After the first round, enable XBZRLE. */
             if (migrate_xbzrle()) {
                 rs->xbzrle_started = true;
@@ -2175,6 +2178,17 @@ static int ram_save_target_page_private(PageSearchStatus *pss)
     ram_addr_t offset = ((ram_addr_t)pss->page) << TARGET_PAGE_BITS;
     long res;
 
+    if (pss->cgs_start_epoch) {
+        res = cgs_ram_save_start_epoch(pss->pss_channel);
+        if (res < 0) {
+            return (int)res;
+        } else if (res > 0) {
+            stat64_add(&mig_stats.transferred, res);
+            stat64_add(&mig_stats.cgs_epochs, 1);
+            pss->cgs_start_epoch = false;
+        }
+    }
+
     res = cgs_mig_savevm_state_ram(pss->pss_channel, block, offset,
                                    pss->cgs_private_gpa, (void *)pss);
     if (res > 0) {
@@ -2561,6 +2575,7 @@ static void ram_state_reset(RAMState *rs)
 
     for (i = 0; i < RAM_CHANNEL_MAX; i++) {
         rs->pss[i].last_sent_block = NULL;
+        rs->pss[i].cgs_start_epoch = true;
     }
 
     rs->last_seen_block = NULL;
