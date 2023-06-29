@@ -97,6 +97,9 @@ typedef struct {
      * Number of pages transferred that were full of zeros.
      */
     Stat64 zero_pages;
+
+    /* Number of private pages that have been sent */
+    Stat64 cgs_private_pages;
 } MigrationAtomicStats;
 
 extern MigrationAtomicStats mig_stats;

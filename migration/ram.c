@@ -35,6 +35,7 @@
 #include "xbzrle.h"
 #include "ram-compress.h"
 #include "ram.h"
+#include "cgs.h"
 #include "migration.h"
 #include "migration-stats.h"
 #include "migration/register.h"
@@ -2122,15 +2123,7 @@ static bool save_compress_page(RAMState *rs, PageSearchStatus *pss,
     return false;
 }
 
-/**
- * ram_save_target_page_legacy: save one target page
- *
- * Returns the number of pages written
- *
- * @rs: current RAM state
- * @pss: data about the page we want to send
- */
-static int ram_save_target_page_legacy(RAMState *rs, PageSearchStatus *pss)
+static int ram_save_target_page_shared(RAMState *rs, PageSearchStatus *pss)
 {
     RAMBlock *block = pss->block;
     ram_addr_t offset = ((ram_addr_t)pss->page) << TARGET_PAGE_BITS;
@@ -2168,6 +2161,43 @@ static int ram_save_target_page_legacy(RAMState *rs, PageSearchStatus *pss)
     }
 
     return ram_save_page(rs, pss);
+}
+
+static int ram_save_target_page_private(PageSearchStatus *pss)
+{
+    RAMBlock *block = pss->block;
+    ram_addr_t offset = ((ram_addr_t)pss->page) << TARGET_PAGE_BITS;
+    long res;
+
+    res = cgs_mig_savevm_state_ram(pss->pss_channel, block, offset,
+                                   pss->cgs_private_gpa, (void *)pss);
+    if (res > 0) {
+        stat64_add(&mig_stats.transferred, res);
+        stat64_add(&mig_stats.cgs_private_pages, 1);
+    } else {
+        /* Return the negative error code */
+        return res;
+    }
+
+    /* Return the number of pages (i.e. 1) succeeded to be saved */
+    return 1;
+}
+
+/**
+ * ram_save_target_page_common: save one target shared or private page
+ *
+ * Returns the number of pages written
+ *
+ * @rs: current RAM state
+ * @pss: data about the page we want to send
+ */
+static int ram_save_target_page_common(RAMState *rs, PageSearchStatus *pss)
+{
+    if (pss->cgs_private_gpa != CGS_PRIVATE_GPA_INVALID) {
+        return ram_save_target_page_private(pss);
+    }
+
+    return ram_save_target_page_shared(rs, pss);
 }
 
 /* Should be called before sending a host page */
@@ -3073,7 +3103,7 @@ static int ram_save_setup(QEMUFile *f, void *opaque)
     ram_control_after_iterate(f, RAM_CONTROL_SETUP);
 
     migration_ops = g_malloc0(sizeof(MigrationOps));
-    migration_ops->ram_save_target_page = ram_save_target_page_legacy;
+    migration_ops->ram_save_target_page = ram_save_target_page_common;
     ret = multifd_send_sync_main(f);
     if (ret < 0) {
         return ret;

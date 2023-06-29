@@ -939,6 +939,7 @@ static void populate_ram_info(MigrationInfo *info, MigrationState *s)
     info->ram->precopy_bytes = stat64_get(&mig_stats.precopy_bytes);
     info->ram->downtime_bytes = stat64_get(&mig_stats.downtime_bytes);
     info->ram->postcopy_bytes = stat64_get(&mig_stats.postcopy_bytes);
+    info->ram->cgs_private_pages = stat64_get(&mig_stats.cgs_private_pages);
 
     if (migrate_xbzrle()) {
         info->xbzrle_cache = g_malloc0(sizeof(*info->xbzrle_cache));
