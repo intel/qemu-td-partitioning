@@ -181,3 +181,23 @@ void cgs_mig_savevm_state_cleanup(void)
 
     cgs_mig.savevm_state_cleanup();
 }
+
+int cgs_mig_loadvm_state_setup(QEMUFile *f)
+{
+    int ret;
+
+    if (!cgs_mig.loadvm_state_setup) {
+        return 0;
+    }
+
+    if (migrate_multifd() || migrate_postcopy_ram()) {
+        error_report("multifd and postcopy not supported by cgs yet");
+        qemu_file_set_error(f, -EINVAL);
+        return -EINVAL;
+    }
+
+    ret = cgs_mig.loadvm_state_setup();
+    cgs_check_error(f, ret);
+
+    return ret;
+}

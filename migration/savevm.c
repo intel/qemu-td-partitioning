@@ -2641,6 +2641,12 @@ static int qemu_loadvm_state_setup(QEMUFile *f)
     int ret;
 
     trace_loadvm_state_setup();
+
+    ret = cgs_mig_loadvm_state_setup(f);
+    if (ret) {
+        return ret;
+    }
+
     QTAILQ_FOREACH(se, &savevm_state.handlers, entry) {
         if (!se->ops || !se->ops->load_setup) {
             continue;
