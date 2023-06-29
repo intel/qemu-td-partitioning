@@ -109,3 +109,20 @@ long cgs_mig_savevm_state_ram(QEMUFile *f, RAMBlock *block,
 
     return hdr_bytes + ret;
 }
+
+/* Return number of bytes sent or the error value (< 0) */
+long cgs_ram_save_start_epoch(QEMUFile *f)
+{
+    long ret;
+
+    if (!cgs_mig.savevm_state_ram_start_epoch) {
+        return 0;
+    }
+
+    ram_save_cgs_epoch_header(f);
+    ret = cgs_mig.savevm_state_ram_start_epoch(f);
+    cgs_check_error(f, ret);
+
+    /* 8 bytes for the cgs header */
+    return ret + 8;
+}

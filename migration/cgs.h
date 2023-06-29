@@ -21,6 +21,7 @@ typedef struct CgsMig {
     int (*savevm_state_setup)(void);
     int (*savevm_state_start)(QEMUFile *f);
     long (*savevm_state_ram)(QEMUFile *f, hwaddr gpa);
+    long (*savevm_state_ram_start_epoch)(QEMUFile *f);
 } CgsMig;
 
 bool cgs_mig_is_ready(void);
@@ -29,5 +30,6 @@ int cgs_mig_savevm_state_start(QEMUFile *f);
 long cgs_mig_savevm_state_ram(QEMUFile *f, RAMBlock *block,
                               ram_addr_t offset, hwaddr gpa,
                               void *pss_context);
+long cgs_ram_save_start_epoch(QEMUFile *f);
 
 #endif

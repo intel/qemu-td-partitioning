@@ -91,6 +91,7 @@
 #define RAM_SAVE_FLAG_COMPRESS_PAGE    0x100
 #define RAM_SAVE_FLAG_MULTIFD_FLUSH    0x200
 #define RAM_SAVE_FLAG_CGS_STATE        0x400
+#define RAM_SAVE_FLAG_CGS_EPOCH        0x800
 
 XBZRLECacheStats xbzrle_counters;
 
@@ -1115,6 +1116,11 @@ static void migration_bitmap_sync_precopy(RAMState *rs, bool last_stage)
     if (precopy_notify(PRECOPY_NOTIFY_AFTER_BITMAP_SYNC, &local_err)) {
         error_report_err(local_err);
     }
+}
+
+void ram_save_cgs_epoch_header(QEMUFile *f)
+{
+    qemu_put_be64(f, RAM_SAVE_FLAG_CGS_EPOCH);
 }
 
 size_t ram_save_cgs_ram_header(QEMUFile *f, RAMBlock *block,
