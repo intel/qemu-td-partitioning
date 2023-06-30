@@ -2132,6 +2132,21 @@ static bool save_compress_page(RAMState *rs, PageSearchStatus *pss,
     return false;
 }
 
+void ram_save_abort(void)
+{
+    uint64_t cgs_epochs = stat64_get(&mig_stats.cgs_epochs);
+    int ret;
+
+    if (!cgs_epochs) {
+        return;
+    }
+
+    ret = cgs_mig_savevm_state_ram_abort();
+    if (ret) {
+        error_report("%s failed: %s", __func__, strerror(ret));
+    }
+}
+
 static int ram_save_target_page_shared(RAMState *rs, PageSearchStatus *pss)
 {
     RAMBlock *block = pss->block;

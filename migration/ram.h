@@ -80,6 +80,8 @@ size_t ram_save_cgs_ram_header(QEMUFile *f, RAMBlock *block,
                                ram_addr_t offset, void *pss_context);
 void ram_save_cgs_epoch_header(QEMUFile *f);
 
+void ram_save_abort(void);
+
 /* ram cache */
 int colo_init_ram_cache(void);
 void colo_flush_ram_cache(void);
