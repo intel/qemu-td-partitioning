@@ -160,6 +160,7 @@ void migration_object_init(void)
     blk_mig_init();
     ram_mig_init();
     dirty_bitmap_mig_init();
+    cgs_mig_init();
 }
 
 void migration_cancel(const Error *error)

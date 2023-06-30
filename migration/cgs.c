@@ -14,6 +14,7 @@
 #include "qemu/osdep.h"
 #include "qemu/error-report.h"
 #include "qemu-file.h"
+#include "sysemu/kvm.h"
 #include "qapi/qapi-types-migration.h"
 #include "options.h"
 #include "savevm.h"
@@ -225,4 +226,15 @@ void cgs_mig_loadvm_state_cleanup(void)
     }
 
     cgs_mig.loadvm_state_cleanup();
+}
+
+void cgs_mig_init(void)
+{
+    switch (kvm_vm_type) {
+    case KVM_X86_TDX_VM:
+        tdx_mig_init(&cgs_mig);
+        break;
+    default:
+        return;
+    }
 }
