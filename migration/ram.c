@@ -4119,6 +4119,14 @@ static int ram_load_precopy(QEMUFile *f)
         case RAM_SAVE_FLAG_MULTIFD_FLUSH:
             multifd_recv_sync_main();
             break;
+
+        case RAM_SAVE_FLAG_CGS_EPOCH:
+            if (cgs_mig_loadvm_state(f) < 0) {
+                error_report(" Failed to load cgs state");
+                ret = -EINVAL;
+            }
+            break;
+
         case RAM_SAVE_FLAG_EOS:
             /* normal exit */
             if (migrate_multifd_flush_after_each_section()) {
