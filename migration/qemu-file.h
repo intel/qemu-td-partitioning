@@ -121,6 +121,7 @@ bool qemu_file_buffer_empty(QEMUFile *file);
  * previously peeked +n-1.
  */
 int coroutine_mixed_fn qemu_peek_byte(QEMUFile *f, int offset);
+int coroutine_mixed_fn qemu_peek_le16(QEMUFile *f, int offset);
 void qemu_file_skip(QEMUFile *f, int size);
 /*
  * qemu_file_credit_transfer:
