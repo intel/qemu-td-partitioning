@@ -338,8 +338,13 @@ typedef struct {
      * 0x00010000 for this structure definition.
      */
     __u32 StructVersion;
+
+    /* SpdmVersionNumberEntry & Count: Suggested SPDM versions to TPA.
+     * Now, always leave 0 here to let TPA itself to decide the version.
+     */
     __u8 SpdmVersionNumberEntryCount;
-    __u16 SpdmVersionNumberEntry;
+    /* __u16 SpdmVersionNumberEntry; */
+
     /* MeasurementRequestAttributes:
      * The SPDM measurement request attributes used in GET_MEASUREMENT.
      * This field includes RawBitStreamRequested.
@@ -360,8 +365,12 @@ typedef struct {
     QemuUUID guid;
 
     __u32 StructVersion;
+
+    /* TdispVersionNumber & Count: Suggested TDISP versions to TPA.
+     * Now, always leave 0 here to let TPA itself to decide the version.
+     */
     __u8  TdispVersionNumCount;
-    __u8  TdispVersionNum;
+    /* __u8  TdispVersionNum; */
     __u8  TdispCapabilities[4];
 } TpaTdispPolicy;
 
