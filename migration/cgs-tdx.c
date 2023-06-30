@@ -17,10 +17,29 @@
 #include "target/i386/kvm/tdx.h"
 #include "qemu/error-report.h"
 
+#define GPA_LIST_OP_EXPORT 1
+
 typedef struct TdxMigHdr {
     uint16_t flags;
     uint16_t buf_list_num;
 } TdxMigHdr;
+
+typedef union GpaListEntry {
+    uint64_t val;
+    struct {
+        uint64_t level:2;
+        uint64_t pending:1;
+        uint64_t reserved_0:4;
+        uint64_t l2_map:3;
+#define GPA_LIST_ENTRY_MIG_TYPE_4KB 0
+        uint64_t mig_type:2;
+        uint64_t gfn:40;
+        uint64_t operation:2;
+        uint64_t reserved_1:2;
+        uint64_t status:5;
+        uint64_t reserved_2:3;
+    };
+} GpaListEntry;
 
 typedef struct TdxMigStream {
     int fd;
@@ -128,6 +147,56 @@ static long tdx_mig_save_epoch(QEMUFile *f, bool in_order_done)
 static long tdx_mig_savevm_state_ram_start_epoch(QEMUFile *f)
 {
     return tdx_mig_save_epoch(f, false);
+}
+
+static void tdx_mig_gpa_list_setup(union GpaListEntry *gpa_list, hwaddr *gpa,
+                                   uint64_t gpa_num, int operation)
+{
+    int i;
+
+    for (i = 0; i < gpa_num; i++) {
+        gpa_list[i].val = 0;
+        gpa_list[i].gfn = gpa[i] >> TARGET_PAGE_BITS;
+        gpa_list[i].mig_type = GPA_LIST_ENTRY_MIG_TYPE_4KB;
+        gpa_list[i].operation = operation;
+    }
+}
+
+static long tdx_mig_save_ram(QEMUFile *f, TdxMigStream *stream)
+{
+    uint64_t num = 1;
+    uint64_t hdr_bytes, mbmd_bytes, gpa_list_bytes,
+             buf_list_bytes, mac_list_bytes;
+    int ret;
+
+    /* Export mbmd, buf list, mac list and gpa list */
+    ret = tdx_mig_stream_ioctl(stream, KVM_TDX_MIG_EXPORT_MEM, 0, &num);
+    if (ret) {
+        return ret;
+    }
+
+    mbmd_bytes = tdx_mig_stream_get_mbmd_bytes(stream);
+    buf_list_bytes = TARGET_PAGE_SIZE;
+    mac_list_bytes = sizeof(Int128);
+    gpa_list_bytes = sizeof(GpaListEntry);
+
+    hdr_bytes = tdx_mig_put_mig_hdr(f, 1, 0);
+    qemu_put_buffer(f, (uint8_t *)stream->mbmd, mbmd_bytes);
+    qemu_put_buffer(f, (uint8_t *)stream->buf_list, buf_list_bytes);
+    qemu_put_buffer(f, (uint8_t *)stream->gpa_list, gpa_list_bytes);
+    qemu_put_buffer(f, (uint8_t *)stream->mac_list, mac_list_bytes);
+
+    return hdr_bytes + mbmd_bytes + gpa_list_bytes +
+           buf_list_bytes + mac_list_bytes;
+}
+
+static long tdx_mig_savevm_state_ram(QEMUFile *f, hwaddr gpa)
+{
+    TdxMigStream *stream = &tdx_mig.streams[0];
+
+    tdx_mig_gpa_list_setup((GpaListEntry *)stream->gpa_list,
+                           &gpa, 1, GPA_LIST_OP_EXPORT);
+    return tdx_mig_save_ram(f, stream);
 }
 
 static bool tdx_mig_is_ready(void)
@@ -240,5 +309,6 @@ void tdx_mig_init(CgsMig *cgs_mig)
     cgs_mig->savevm_state_start = tdx_mig_savevm_state_start;
     cgs_mig->savevm_state_ram_start_epoch =
                         tdx_mig_savevm_state_ram_start_epoch;
+    cgs_mig->savevm_state_ram = tdx_mig_savevm_state_ram;
     cgs_mig->loadvm_state_setup = tdx_mig_stream_setup;
 }
