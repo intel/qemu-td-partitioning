@@ -834,6 +834,9 @@ static void vfio_listener_region_add(MemoryListener *listener,
     bool hostwin_found;
     Error *err = NULL;
 
+    if (container->iommu_type == VFIO_NOIOMMU_IOMMU)
+        return;
+
     if (vfio_listener_skipped_section(section)) {
         trace_vfio_listener_region_add_skip(
                 section->offset_within_address_space,
@@ -1077,6 +1080,9 @@ static void vfio_listener_region_del(MemoryListener *listener,
     Int128 llend, llsize;
     int ret;
     bool try_unmap = true;
+
+    if (container->iommu_type == VFIO_NOIOMMU_IOMMU)
+        return;
 
     if (vfio_listener_skipped_section(section)) {
         trace_vfio_listener_region_del_skip(
@@ -1837,7 +1843,7 @@ static int vfio_get_iommu_type(VFIOContainer *container,
                                Error **errp)
 {
     int iommu_types[] = { VFIO_TYPE1v2_IOMMU, VFIO_TYPE1_IOMMU,
-                          VFIO_SPAPR_TCE_v2_IOMMU, VFIO_SPAPR_TCE_IOMMU };
+                          VFIO_SPAPR_TCE_v2_IOMMU, VFIO_SPAPR_TCE_IOMMU, VFIO_NOIOMMU_IOMMU };
     int i;
 
     for (i = 0; i < ARRAY_SIZE(iommu_types); i++) {
@@ -1854,15 +1860,18 @@ static int vfio_init_container(VFIOContainer *container, int group_fd,
 {
     int iommu_type, ret;
 
-    iommu_type = vfio_get_iommu_type(container, errp);
-    if (iommu_type < 0) {
-        return iommu_type;
-    }
-
     ret = ioctl(group_fd, VFIO_GROUP_SET_CONTAINER, &container->fd);
     if (ret) {
         error_setg_errno(errp, errno, "Failed to set group container");
         return -errno;
+    }
+
+    iommu_type = vfio_get_iommu_type(container, errp);
+    if (iommu_type < 0) {
+        if (ioctl(group_fd, VFIO_GROUP_UNSET_CONTAINER, &container->fd)) {
+            error_report("vfio: error disconnecting group from container");
+        }
+        return iommu_type;
     }
 
     while (ioctl(container->fd, VFIO_SET_IOMMU, iommu_type)) {
@@ -2267,8 +2276,14 @@ VFIOGroup *vfio_get_group(int groupid, AddressSpace *as, Error **errp)
     snprintf(path, sizeof(path), "/dev/vfio/%d", groupid);
     group->fd = qemu_open_old(path, O_RDWR);
     if (group->fd < 0) {
-        error_setg_errno(errp, errno, "failed to open %s", path);
-        goto free_group_exit;
+        if (object_property_get_bool(OBJECT(qdev_get_machine()), "vfio-allow-noiommu", errp)) {
+            snprintf(path, sizeof(path), "/dev/vfio/noiommu-%d", groupid);
+            group->fd = qemu_open_old(path, O_RDWR);
+        }
+        if (group->fd < 0) {
+            error_setg_errno(errp, errno, "failed to open %s", path);
+            goto free_group_exit;
+        }
     }
 
     if (ioctl(group->fd, VFIO_GROUP_GET_STATUS, &status)) {
