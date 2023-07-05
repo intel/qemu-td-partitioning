@@ -2733,6 +2733,9 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
             }
 
             tdp_enlightenment = true;
+        } else if (object_property_get_bool(OBJECT(ms), "vfio-identity-bars", &local_err)) {
+                error_report("vfio-identity-bars: only support td-part-enlighten VM");
+                exit(1);
         }
     }
 
