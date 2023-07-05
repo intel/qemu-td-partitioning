@@ -1535,6 +1535,11 @@ int qemu_savevm_state_complete_precopy(QEMUFile *f, bool iterable_only,
         }
     }
 
+    ret = cgs_mig_savevm_state_end(f);
+    if (ret) {
+        return ret;
+    }
+
     if (iterable_only) {
         goto flush;
     }
