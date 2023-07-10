@@ -646,7 +646,7 @@ static void tdx_vtpm_server_fire_wait_for_request(TdxVtpmServer *server,
 static void tdx_vtpm_server_add_wait_for_request(TdxVtpmServer *server, TdxVmcallServiceItem *vsi)
 {
     int ret;
-    TdxVtpmServerPendingRequest entry;
+    TdxVtpmServerPendingRequest entry = {0};
 
     entry.vsi = vsi;
     ret = tdx_vtpm_server_request_queue_add(server, &entry);
