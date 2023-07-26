@@ -26,6 +26,7 @@
 #include "sysemu/cpu-throttle.h"
 #include "rdma.h"
 #include "ram.h"
+#include "cgs.h"
 #include "ram-compress.h"
 #include "migration/global_state.h"
 #include "migration/misc.h"
@@ -1551,6 +1552,11 @@ static bool migrate_prepare(MigrationState *s, bool blk, bool blk_inc,
                             bool resume, Error **errp)
 {
     Error *local_err = NULL;
+
+    if (!cgs_mig_is_ready()) {
+        error_setg(errp, "cgs mig required, but not ready");
+        return false;
+    }
 
     if (resume) {
         if (s->state != MIGRATION_STATUS_POSTCOPY_PAUSED) {
