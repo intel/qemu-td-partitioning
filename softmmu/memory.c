@@ -1789,7 +1789,7 @@ void memory_region_init_ram_from_file(MemoryRegion *mr,
         }
 
         int cnt_below_4g = 0, cnt_above_4g = 0;
-        uint64_t ram_size;
+        uint64_t ram_size = 0;
         uint64_t total_memmap_size = 0;
         /* Currently we only support 2 memmap regions */
         for (int i = 0; i < 2; i++) {
