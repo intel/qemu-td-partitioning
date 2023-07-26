@@ -1231,6 +1231,19 @@ int tdx_pre_create_vcpu(CPUState *cpu)
         goto out;
     }
 
+    /*
+     * Linux TD VM has limitation on CPU topology with more than 1 socket/die, the CPU
+     * won't bring up.
+     * basically only Linux TD VM is created with QEMU, so checking without care guest
+     * type.
+     *
+     */
+    if (ms->smp.sockets > 1 || ms->smp.dies > 1) {
+        error_report("Linux TD VM doesn't support more than 1 socket/die CPU topology");
+        r = -EINVAL;
+        goto out;
+    }
+
     r = -EINVAL;
     if (env->tsc_khz && (env->tsc_khz < TDX_MIN_TSC_FREQUENCY_KHZ ||
                          env->tsc_khz > TDX_MAX_TSC_FREQUENCY_KHZ)) {
