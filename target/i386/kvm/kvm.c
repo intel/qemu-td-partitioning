@@ -182,9 +182,6 @@ int kvm_get_vm_type(MachineState *ms, const char *vm_type)
     }
 
     if (ms->cgs && object_dynamic_cast(OBJECT(ms->cgs), TYPE_TDX_GUEST)) {
-        if (vm_type && kvm_type != KVM_X86_TDX_VM) {
-            warn_report("Specified 'kvm-type':%s via property inconsistent with 'confidential-guest-support'", vm_type);
-        }
         kvm_type = KVM_X86_TDX_VM;
     }
 
