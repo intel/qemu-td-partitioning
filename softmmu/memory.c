@@ -25,6 +25,7 @@
 #include "qom/object.h"
 #include "trace.h"
 
+#include <linux/kvm.h>
 #include "exec/memory-internal.h"
 #include "exec/ram_addr.h"
 #include "sysemu/kvm.h"
@@ -3637,6 +3638,7 @@ void memory_region_init_ram(MemoryRegion *mr,
     vmstate_register_ram(mr, owner_dev);
 }
 
+#ifdef CONFIG_KVM
 void memory_region_init_ram_gmem(MemoryRegion *mr,
                                  Object *owner,
                                  const char *name,
@@ -3685,6 +3687,7 @@ void memory_region_init_ram_gmem(MemoryRegion *mr,
     owner_dev = DEVICE(owner);
     vmstate_register_ram(mr, owner_dev);
 }
+#endif
 
 void memory_region_init_rom(MemoryRegion *mr,
                             Object *owner,
