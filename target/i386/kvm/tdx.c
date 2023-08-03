@@ -763,8 +763,8 @@ out:
 static void get_tdx_capabilities(void)
 {
     struct kvm_tdx_capabilities *caps;
-    /* 1st generation of TDX reports 6 cpuid configs */
-    int nr_cpuid_configs = 6;
+    /* tdxio seam module 2.0 reports 8 cpuid configs */
+    int nr_cpuid_configs = 8;
     int r, size, i;
 
     if (!get_tdx_capabilities_by_sysfs())
