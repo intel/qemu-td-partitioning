@@ -3690,6 +3690,7 @@ static Property vfio_pci_dev_properties[] = {
     DEFINE_PROP_LINK("iommufd", VFIOPCIDevice, vbasedev.iommufd,
                      TYPE_IOMMUFD_BACKEND, IOMMUFDBackend *),
 #endif
+    DEFINE_PROP_BOOL("x-secure-mode", VFIOPCIDevice, secure, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 

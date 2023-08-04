@@ -38,6 +38,7 @@
 #include "trace.h"
 #include "qapi/error.h"
 #include "migration/migration.h"
+#include "hw/vfio/pci.h"
 
 VFIOGroupList vfio_group_list =
     QLIST_HEAD_INITIALIZER(vfio_group_list);
@@ -865,7 +866,8 @@ static void vfio_disconnect_container(VFIOGroup *group)
     }
 }
 
-static VFIOGroup *vfio_get_group(int groupid, AddressSpace *as, Error **errp)
+static VFIOGroup *vfio_get_group(int groupid, AddressSpace *as,
+                                 unsigned attr, Error **errp)
 {
     VFIOGroup *group;
     VFIOContainer *bcontainer;
@@ -906,6 +908,14 @@ static VFIOGroup *vfio_get_group(int groupid, AddressSpace *as, Error **errp)
                           "Please ensure all devices within the iommu_group "
                           "are bound to their vfio bus driver.\n");
         goto close_fd_exit;
+    }
+
+    if (attr == VFIO_GROUP_ATTRS_TRUSTED) {
+        if (ioctl(group->fd, VFIO_GROUP_SET_ATTRS, &attr)) {
+            error_setg_errno(errp, errno, "failed to set group %d attr %x",
+                            groupid, attr);
+            goto close_fd_exit;
+        }
     }
 
     group->groupid = groupid;
@@ -1147,6 +1157,7 @@ static int vfio_device_groupid(VFIODevice *vbasedev, Error **errp)
 static int vfio_legacy_attach_device(char *name, VFIODevice *vbasedev,
                                      AddressSpace *as, Error **errp)
 {
+    VFIOPCIDevice *vdev = container_of(vbasedev, VFIOPCIDevice, vbasedev);
     int groupid = vfio_device_groupid(vbasedev, errp);
     VFIODevice *vbasedev_iter;
     VFIOGroup *group;
@@ -1157,7 +1168,8 @@ static int vfio_legacy_attach_device(char *name, VFIODevice *vbasedev,
     }
 
     trace_vfio_realize(vbasedev->name, groupid);
-    group = vfio_get_group(groupid, as, errp);
+    group = vfio_get_group(groupid, as,
+                           vdev->secure ? VFIO_GROUP_ATTRS_TRUSTED : 0, errp);
     if (!group) {
         return -1;
     }
