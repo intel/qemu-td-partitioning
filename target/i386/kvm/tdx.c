@@ -33,6 +33,7 @@
 #include "kvm_i386.h"
 #include "tdx.h"
 #include "tdx-vmcall-service.h"
+#include "tdxio.h"
 #include "../cpu-internal.h"
 
 #include "trace.h"
@@ -1172,6 +1173,13 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
         kvm_setup_set_memory_region_debug_ops(kvm_state,
                                               kvm_encrypted_guest_set_memory_region_debug_ops);
         set_encrypted_memory_debug_ops();
+    }
+
+    int ret = tdx_services_init();
+    if (ret < 0) {
+        error_report("kvm: Failed to initialize TDX services: %s",
+                     strerror(-ret));
+        return ret;
     }
 
     return 0;

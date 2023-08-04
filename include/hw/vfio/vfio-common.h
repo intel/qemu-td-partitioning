@@ -135,6 +135,7 @@ typedef struct VFIODevice {
     VFIOIOASHwpt *hwpt;
     IOMMUFDBackend *iommufd;
 #endif
+    __u64 handle;
 } VFIODevice;
 
 struct VFIODeviceOps {

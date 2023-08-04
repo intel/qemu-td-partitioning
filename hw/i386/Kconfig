@@ -15,6 +15,11 @@ config TDX
     select X86_FW_OVMF
     depends on KVM
 
+
+config TDXIO
+    bool
+    depends on TDX
+
 config PC
     bool
     imply APPLESMC
@@ -32,6 +37,7 @@ config PC
     imply SEV
     imply SGX
     imply TDX
+    imply TDXIO
     imply TEST_DEVICES
     imply TPM_CRB
     imply TPM_TIS_ISA
