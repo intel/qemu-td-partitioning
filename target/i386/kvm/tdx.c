@@ -1601,24 +1601,6 @@ static void tdx_guest_class_init(ObjectClass *oc, void *data)
 {
 }
 
-#define TDG_VP_VMCALL_MAP_GPA                           0x10001ULL
-#define TDG_VP_VMCALL_GET_QUOTE                         0x10002ULL
-#define TDG_VP_VMCALL_REPORT_FATAL_ERROR                0x10003ULL
-#define TDG_VP_VMCALL_SETUP_EVENT_NOTIFY_INTERRUPT      0x10004ULL
-#define TDG_VP_VMCALL_SERVICE                           0x10005ULL
-
-#define TDG_VP_VMCALL_SUCCESS           0x0000000000000000ULL
-#define TDG_VP_VMCALL_RETRY             0x0000000000000001ULL
-#define TDG_VP_VMCALL_INVALID_OPERAND   0x8000000000000000ULL
-#define TDG_VP_VMCALL_ALIGN_ERROR       0x8000000000000002ULL
-
-#define TDX_GET_QUOTE_STRUCTURE_VERSION 1ULL
-
-#define TDX_VP_GET_QUOTE_SUCCESS                0ULL
-#define TDX_VP_GET_QUOTE_IN_FLIGHT              (-1ULL)
-#define TDX_VP_GET_QUOTE_ERROR                  0x8000000000000000ULL
-#define TDX_VP_GET_QUOTE_QGS_UNAVAILABLE        0x8000000000000001ULL
-
 /* Limit to avoid resource starvation. */
 #define TDX_GET_QUOTE_MAX_BUF_LEN       (128 * 1024)
 #define TDX_MAX_GET_QUOTE_REQUEST       16
