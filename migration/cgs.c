@@ -154,6 +154,8 @@ int cgs_mig_savevm_state_end(QEMUFile *f)
     qemu_put_byte(f, QEMU_VM_SECTION_CGS_END);
     ret = cgs_mig.savevm_state_end(f);
     cgs_check_error(f, ret);
+    qemu_put_byte(f, QEMU_VM_SECTION_FOOTER);
+    qemu_fflush(f);
 
     return ret;
 }

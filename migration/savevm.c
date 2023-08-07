@@ -2782,6 +2782,13 @@ retry:
         case QEMU_VM_SECTION_CGS_START:
         case QEMU_VM_SECTION_CGS_END:
             ret = cgs_mig_loadvm_state(f);
+            if (section_type == QEMU_VM_SECTION_CGS_END && !ret) {
+                section_type = qemu_get_byte(f);
+                if (section_type != QEMU_VM_SECTION_FOOTER) {
+                    ret = -1;
+                    goto out;
+                }
+            }
             break;
         case QEMU_VM_COMMAND:
             ret = loadvm_process_command(f);
