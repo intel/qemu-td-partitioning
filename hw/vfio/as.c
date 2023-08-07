@@ -1539,8 +1539,8 @@ retry:
     return info;
 }
 
-int vfio_attach_device(char *name, VFIODevice *vbasedev,
-                       AddressSpace *as, Error **errp)
+int vfio_attach_device(char *name, VFIODevice *vbasedev, AddressSpace *as,
+                       bool secure, Error **errp)
 {
     const VFIOIOMMUBackendOpsClass *ops;
 
@@ -1558,7 +1558,7 @@ int vfio_attach_device(char *name, VFIODevice *vbasedev,
         error_setg(errp, "VFIO IOMMU Backend not found!");
         return -ENODEV;
     }
-    return ops->attach_device(name, vbasedev, as, errp);
+    return ops->attach_device(name, vbasedev, as, secure, errp);
 }
 
 void vfio_detach_device(VFIODevice *vbasedev)

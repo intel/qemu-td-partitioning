@@ -139,7 +139,7 @@ struct VFIOIOMMUBackendOpsClass {
                      hwaddr iova, ram_addr_t size,
                      IOMMUTLBEntry *iotlb);
     int (*attach_device)(char *name, VFIODevice *vbasedev,
-                         AddressSpace *as, Error **errp);
+                         AddressSpace *as, bool secure, Error **errp);
     void (*detach_device)(VFIODevice *vbasedev);
     /* migration feature */
     int (*set_dirty_page_tracking)(VFIOContainer *container, bool start);

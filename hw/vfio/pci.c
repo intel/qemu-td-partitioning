@@ -3321,7 +3321,8 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
     }
 
     ret = vfio_attach_device(name, vbasedev,
-                             pci_device_iommu_address_space(pdev), errp);
+                             pci_device_iommu_address_space(pdev),
+                             vdev->secure, errp);
     g_free(name);
     if (ret) {
         goto error;

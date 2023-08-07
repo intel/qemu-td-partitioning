@@ -918,6 +918,7 @@ struct vfio_device_feature {
 struct vfio_device_bind_iommufd {
 	__u32		argsz;
 	__u32		flags;
+#define VFIO_DEVICE_BIND_IOMMUFD_TRUSTED_DOMAIN    (1 << 1)
 	__s32		iommufd;
 	__u32		out_devid;
 };

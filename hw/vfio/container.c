@@ -1154,10 +1154,9 @@ static int vfio_device_groupid(VFIODevice *vbasedev, Error **errp)
     return groupid;
 }
 
-static int vfio_legacy_attach_device(char *name, VFIODevice *vbasedev,
-                                     AddressSpace *as, Error **errp)
+static int vfio_legacy_attach_device(char *name, VFIODevice *vbasedev, AddressSpace *as,
+                                     bool secure, Error **errp)
 {
-    VFIOPCIDevice *vdev = container_of(vbasedev, VFIOPCIDevice, vbasedev);
     int groupid = vfio_device_groupid(vbasedev, errp);
     VFIODevice *vbasedev_iter;
     VFIOGroup *group;
@@ -1169,7 +1168,7 @@ static int vfio_legacy_attach_device(char *name, VFIODevice *vbasedev,
 
     trace_vfio_realize(vbasedev->name, groupid);
     group = vfio_get_group(groupid, as,
-                           vdev->secure ? VFIO_GROUP_ATTRS_TRUSTED : 0, errp);
+                           secure ? VFIO_GROUP_ATTRS_TRUSTED : 0, errp);
     if (!group) {
         return -1;
     }

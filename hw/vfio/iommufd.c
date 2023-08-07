@@ -243,11 +243,11 @@ vfio_device_detach_container(VFIODevice *vbasedev,
 
 static int vfio_device_attach_container(VFIODevice *vbasedev,
                                         VFIOIOMMUFDContainer *container,
-                                        Error **errp)
+                                        bool secure, Error **errp)
 {
     struct vfio_device_bind_iommufd bind = {
         .argsz = sizeof(bind),
-        .flags = 0,
+        .flags = secure ? VFIO_DEVICE_BIND_IOMMUFD_TRUSTED_DOMAIN : 0,
         .iommufd = container->be->fd,
     };
     struct vfio_device_attach_iommufd_pt attach_data = {
@@ -327,7 +327,8 @@ static int vfio_ram_block_discard_disable(bool state)
 }
 
 static int iommufd_attach_device(char *name, VFIODevice *vbasedev,
-                                 AddressSpace *as, Error **errp)
+                                 AddressSpace *as, bool secure,
+                                 Error **errp)
 {
     VFIOIOMMUBackendOpsClass *ops = VFIO_IOMMU_BACKEND_OPS_CLASS(
         object_class_by_name(TYPE_VFIO_IOMMU_BACKEND_IOMMUFD_OPS));
@@ -358,7 +359,7 @@ static int iommufd_attach_device(char *name, VFIODevice *vbasedev,
             continue;
         }
         container = container_of(bcontainer, VFIOIOMMUFDContainer, bcontainer);
-        if (vfio_device_attach_container(vbasedev, container, &err)) {
+        if (vfio_device_attach_container(vbasedev, container, secure, &err)) {
             const char *msg = error_get_pretty(err);
 
             trace_vfio_iommufd_fail_attach_existing_container(msg);
@@ -395,7 +396,7 @@ static int iommufd_attach_device(char *name, VFIODevice *vbasedev,
     bcontainer = &container->bcontainer;
     vfio_container_init(bcontainer, space, ops);
 
-    ret = vfio_device_attach_container(vbasedev, container, errp);
+    ret = vfio_device_attach_container(vbasedev, container, secure, &err);
     if (ret) {
         goto err_free_container;
     }
