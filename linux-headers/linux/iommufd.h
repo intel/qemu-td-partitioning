@@ -441,4 +441,28 @@ struct iommu_hw_info {
 	__u32 __reserved;
 };
 #define IOMMU_GET_HW_INFO _IO(IOMMUFD_TYPE, IOMMUFD_CMD_GET_HW_INFO)
+
+enum iommu_device_data_type {
+	IOMMU_DEVICE_DATA_NONE = 0,
+	IOMMU_DEVICE_DATA_INTEL_VTD,
+};
+
+/**
+ * struct iommu_device_info_vtd - Intel VT-d device info
+ *
+ * @flags: Must be set to 0
+ * @__reserved: Must be 0
+ * @cap_reg: Basic capability register value
+ * @ecap_reg: Extended capability register value
+ * @id: iommu_id, only for TEE-IO (tdxio) mode.
+ *
+ * Intel hardware iommu capability.
+ */
+struct iommu_device_info_vtd {
+	__u32 flags;
+	__u32 __reserved;
+	__aligned_u64 cap_reg;
+	__aligned_u64 ecap_reg;
+	__aligned_u64 id;
+};
 #endif
