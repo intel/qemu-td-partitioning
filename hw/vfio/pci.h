@@ -179,7 +179,7 @@ struct VFIOPCIDevice {
     bool clear_parent_atomics_on_exit;
     VFIODisplay *dpy;
     Notifier irqchip_change_notifier;
-    uint64_t handle;
+    uint32_t func_id;
 };
 
 /* Use uin32_t for vendor & device so PCI_ANY_ID expands and cannot match hw */

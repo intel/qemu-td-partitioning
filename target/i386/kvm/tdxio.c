@@ -443,48 +443,63 @@ static int get_tmgr_fd(VFIOPCIDevice* vdev)
     return fd;
 }
 
-static uint8_t tdx_serv_tdcm_get_dev_handle(struct TdxEvent *event)
+static uint32_t vdev_to_func_id(struct VFIOPCIDevice *vdev)
 {
-    struct tdcm_cmd_get_dev_handle *cmd = (void *)event->cmd;
-    struct tdcm_resp_get_dev_handle *resp = (void *)event->resp;
-    VFIOPCIDevice *vdev = find_vfio_by_devid(cmd->devid);
+    uint32_t func_id;
+
+    func_id = vdev->host.bus << 8 | vdev->host.slot << 5 | vdev->host.function;
+    if (vdev->host.domain)
+        func_id |= ((vdev->host.domain << 16) | (1 << 24));
+
+    return func_id;
+}
+
+static uint8_t tdx_serv_tdcm_get_dev_ctx(struct TdxEvent *event)
+{
+    struct tdcm_cmd_get_dev_ctx *cmd = (void *)event->cmd;
+    struct tdcm_resp_get_dev_ctx *resp = (void *)event->resp;
+    VFIOPCIDevice *vdev = find_vfio_by_devid(cmd->hdr.devid);
     uint8_t ret = TDCM_RESP_STS_OK;
 
-    if (vdev) {
+    if (vdev && vdev->secure) {
         struct kvm_tdi_info info = { 0 };
 
-        info.devid = vdev->host.bus << 8 | vdev->host.slot << 5 | vdev->host.function;
+        info.func_id = vdev_to_func_id(vdev);
 
         ret = kvm_vm_ioctl(kvm_state, KVM_TDI_GET_INFO, &info);
         if (ret)
             return TDCM_RESP_STS_FAIL;
 
-        resp->dev_handle = info.handle;
-        vdev->handle = info.handle;
+        resp->func_id = info.func_id;
+        resp->nonce[0]  = info.nonce0;
+        resp->nonce[1]  = info.nonce1;
+        resp->nonce[2]  = info.nonce2;
+        resp->nonce[3]  = info.nonce3;
+
+        vdev->func_id = info.func_id;
     } else {
-        resp->dev_handle = 0;
+        resp->func_id = 0;
     }
 
-    DPRINTF("devid %x handle %llx vdev %p\n",
-            cmd->devid, resp->dev_handle, vdev);
+    DPRINTF("devid %x func_id %x vdev %p\n",
+            cmd->hdr.devid, resp->func_id, vdev);
 
     return ret;
 }
 
-static uint8_t tdx_serv_tdcm_devif(struct TdxEvent *event)
+static uint8_t tdx_serv_tdcm_tdisp(struct TdxEvent *event)
 {
-    struct tdcm_cmd_devif *cmd = (void *)event->cmd;
+    struct tdcm_cmd_tdisp *cmd = (void *)event->cmd;
     struct kvm_tdi_user_request req = { 0 };
+    VFIOPCIDevice *vdev = find_vfio_by_devid(cmd->hdr.devid);
     int ret;
 
-    req.handle = cmd->dev_handle;
-    req.parm.raw = cmd->req_param;
-    req.info.raw = cmd->req_info;
+    req.func_id = vdev_to_func_id(vdev);
 
     ret = kvm_vm_ioctl(kvm_state, KVM_TDI_USER_REQUEST, &req);
     if (ret) {
-        DPRINTF("handle 0x%llx, TDISP request fail. ret %d\n",
-                cmd->dev_handle, ret);
+        DPRINTF("devid 0x%x, func 0x%x TDISP request fail. ret %d\n",
+                cmd->hdr.devid, req.func_id, ret);
         return TDCM_RESP_STS_FAIL;
     }
 
@@ -493,32 +508,29 @@ static uint8_t tdx_serv_tdcm_devif(struct TdxEvent *event)
 
 static uint8_t tdx_serv_tdcm_get_dev_info(struct TdxEvent *event)
 {
-    struct tdcm_cmd_get_dev_info *tdcm_cmd = (void *)event->cmd;
-    struct tdcm_resp_get_dev_info *tdcm_resp = (void *)event->resp;
+    struct tdcm_cmd_get_dev_info *cmd = (void *)event->cmd;
+    struct tdcm_resp_get_dev_info *resp = (void *)event->resp;
     VFIOPCIDevice *vdev = find_vfio_by_devid(cmd->hdr.devid);
     struct tmgr_dev_info dev_info;
     uint32_t hdr_size, len;
     int ret, tmgr_fd;
 
-
     if (!vdev) {
-        DPRINTF("handle 0x%llx, no SPDM device found\n",
-                tdcm_cmd->dev_handle);
+        DPRINTF("devid 0x%x, no SPDM device found\n", cmd->hdr.devid);
         return TDCM_RESP_STS_FAIL;
     }
 
     tmgr_fd = get_tmgr_fd(vdev);
     if (tmgr_fd < 0) {
-        DPRINTF("handle 0x%llx, fail to get spdm fd\n",
-                tdcm_cmd->dev_handle);
+        DPRINTF("devid 0x%x, fail to get spdm fd\n", cmd->hdr.devid);
         return TDCM_RESP_STS_FAIL;
     }
 
     ret = ioctl(tmgr_fd, TDISP_MGR_GET_DEVICE_INFO_SIZE, &dev_info.size);
     if (ret) {
-        DPRINTF("handle 0x%llx SPDM dev %d,"
+        DPRINTF("devid 0x%x SPDM dev %d,"
                 "fail to get device info size. ret %d\n",
-                tdcm_cmd->dev_handle, tmgr_fd, ret);
+                cmd->hdr.devid, tmgr_fd, ret);
         close(tmgr_fd);
         return TDCM_RESP_STS_FAIL;
     }
@@ -526,31 +538,31 @@ static uint8_t tdx_serv_tdcm_get_dev_info(struct TdxEvent *event)
     DPRINTF("Device Info Data Size is %u\n", dev_info.size);
 
     hdr_size = sizeof(struct tdcm_resp_get_dev_info);
-    len = tdcm_resp->resp.length - hdr_size;
+    len = resp->hdr.resp.length - hdr_size;
     DPRINTF("len 0x%x\n", len);
 
     if (dev_info.size > len) {
         DPRINTF("No enough response buffer 0x%x for DEV_INFO_DATA 0x%x.\n",
                 len, dev_info.size);
-        tdcm_resp->resp.status = SERV_RESP_STS_BUF_SMALL;
+        resp->hdr.resp.status = SERV_RESP_STS_BUF_SMALL;
         close(tmgr_fd);
         return TDCM_RESP_STS_FAIL;
     }
 
-    dev_info.data = tdcm_resp->dev_info_data;
-    ret = ioctl(tmgr_fd, TDISP_MGR_GET_DEVICE_INFO, tdcm_resp->dev_info_data);
+    dev_info.data = resp->dev_info_data;
+    ret = ioctl(tmgr_fd, TDISP_MGR_GET_DEVICE_INFO, resp->dev_info_data);
     if (ret) {
-        DPRINTF("handle 0x%llx TMGR %d, fail to get dev info data. ret %d\n",
-                tdcm_cmd->dev_handle, tmgr_fd, ret);
+        DPRINTF("devid 0x%x TMGR %d, fail to get dev info data. ret %d\n",
+                cmd->hdr.devid, tmgr_fd, ret);
         close(tmgr_fd);
         return TDCM_RESP_STS_FAIL;
     }
 
-    tdcm_resp->resp.length = hdr_size + dev_info.size;
+    resp->hdr.resp.length = hdr_size + dev_info.size;
 
-    DPRINTF("handle %llx dev_info_data %p tmgr %d resp.length 0x%x\n",
-            tdcm_cmd->dev_handle, dev_info.data, tmgr_fd,
-            tdcm_resp->resp.length);
+    DPRINTF("devid %x dev_info_data %p tmgr %d resp.length 0x%x\n",
+            cmd->hdr.devid, dev_info.data, tmgr_fd,
+            resp->hdr.resp.length);
 
     close(tmgr_fd);
     return TDCM_RESP_STS_OK;
@@ -592,15 +604,15 @@ static int tdx_serv_tdcm(struct TdxEvent *event)
                                       sizeof(struct tdx_serv_resp));
 
     switch (tdcm_cmd->command) {
-    case TDCM_CMD_GET_DEV_HANDLE:
-        resp->length = sizeof(struct tdcm_resp_get_dev_handle);
-        tdcm_resp->status = tdx_serv_tdcm_get_dev_handle(event);
+    case TDCM_CMD_GET_DEV_CTX:
+        resp->length = sizeof(struct tdcm_resp_get_dev_ctx);
+        tdcm_resp->status = tdx_serv_tdcm_get_dev_ctx(event);
         break;
     case TDCM_CMD_TDISP:
         /* TODO: call TDISP kernel driver */
 
-        resp->length = sizeof(struct tdcm_resp_devif);
-        tdcm_resp->status = tdx_serv_tdcm_devif(event);
+        resp->length = sizeof(struct tdcm_resp_tdisp);
+        tdcm_resp->status = tdx_serv_tdcm_tdisp(event);
         break;
     case TDCM_CMD_MAP_DMA_GPA:
         /* TODO: call MAP_DMA_GPA kernel driver */

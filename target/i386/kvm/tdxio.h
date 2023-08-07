@@ -141,70 +141,62 @@ struct spdm_resp_hdr {
 
 /* TDG.VP.VMCALL <Service.TDCM> command header */
 struct tdcm_cmd_hdr {
+    struct tdx_serv_cmd cmd;
     __u8 version;
     __u8 command;
-#define TDCM_CMD_GET_DEV_HANDLE 0
+#define TDCM_CMD_GET_DEV_CTX    0
 #define TDCM_CMD_TDISP          1
 #define TDCM_CMD_MAP_DMA_GPA    2
 #define TDCM_CMD_GET_DEV_INFO   3
-
     __u16 reserved;
+    __u32 devid;
 };
 
 /* TDG.VP.VMCALL <Service.TDCM> response header */
 struct tdcm_resp_hdr {
+    struct tdx_serv_resp resp;
     __u8 version;
     __u8 command;
     __u8 status;
 #define TDCM_RESP_STS_OK   0
 #define TDCM_RESP_STS_FAIL 1
-
     __u8 reserved;
 };
 
-/* TDG.VP.VMCALL <Service.TDCM.GetDeviceHandle> command */
-struct tdcm_cmd_get_dev_handle {
-    struct tdx_serv_cmd cmd;
+/* TDG.VP.VMCALL <Service.TDCM.GetDeviceContext> command */
+struct tdcm_cmd_get_dev_ctx {
     struct tdcm_cmd_hdr hdr;
-    __u32 devid;
 };
 
-/* TDG.VP.VMCALL <Service.TDCM.GetDeviceHandle> response */
-struct tdcm_resp_get_dev_handle {
+/* TDG.VP.VMCALL <Service.TDCM.GetDeviceContext> response */
+struct tdcm_resp_get_dev_ctx {
     struct tdx_serv_resp resp;
     struct tdcm_resp_hdr hdr;
-    __u64 dev_handle;
+    __u32 func_id;
+    __u64 rsvd;
+    __u64 nonce[4];
 };
 
-/* TDG.VP.VMCALL <Service.TDCM.DEVIF> command */
-struct tdcm_cmd_devif {
+/* TDG.VP.VMCALL <Service.TDCM.TDISP> command */
+struct tdcm_cmd_tdisp {
     struct tdx_serv_cmd cmd;
     struct tdcm_cmd_hdr hdr;
-    __u64 dev_handle;
-    __u64 req_param;
-    __u64 req_info;
 };
 
 /* TDG.VP.VMCALL <Service.TDCM.DEVIF> response */
-struct tdcm_resp_devif {
-    struct tdx_serv_resp resp;
+struct tdcm_resp_tdisp {
     struct tdcm_resp_hdr hdr;
-    __u64 dev_handle;
 };
 
 /* TDG.VP.VMCALL <Service.TDCM.GetDeviceInfo> command */
 struct tdcm_cmd_get_dev_info {
-    struct tdx_serv_cmd cmd;
     struct tdcm_cmd_hdr hdr;
-    __u64 dev_handle;
     __u8 tpa_request_nonce[TPA_REQUEST_NONCE_LEN];
 };
 
 /* TDG.VP.VMCALL <Service.TDCM.GetDeviceInfo> response */
 struct tdcm_resp_get_dev_info {
-    struct tdx_serv_resp resp;
     struct tdcm_resp_hdr hdr;
-    __u64 dev_handle;
     __u8 dev_info_data[0];
 };
 
