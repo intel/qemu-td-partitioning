@@ -10,7 +10,6 @@
 
 #include <linux/const.h>
 #include <linux/types.h>
-
 #include <linux/ioctl.h>
 #include <asm/kvm.h>
 
@@ -363,6 +362,7 @@ struct kvm_tdx_exit {
 #define KVM_EXIT_RISCV_CSR        36
 #define KVM_EXIT_NOTIFY           37
 
+/* WORKAROUND to avoid conflict with upstream. */
 #define KVM_EXIT_TDX              50
 #define KVM_EXIT_MEMORY_FAULT     100
 
@@ -1300,11 +1300,9 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_ARM_SUPPORTED_BLOCK_SIZES 229
 
 /* TODO: remove this workaround to avoid CAP number conflict in the upstream. */
+#define KVM_CAP_ENCRYPT_MEMORY_DEBUG 300
 #define KVM_CAP_MEMORY_ATTRIBUTES 500
 #define KVM_CAP_USER_MEMORY2 750
-
-#define KVM_CAP_ENCRYPT_MEMORY_DEBUG 300
-
 #define KVM_CAP_VM_TYPES 1000
 
 #ifdef KVM_CAP_IRQ_ROUTING
@@ -2399,4 +2397,20 @@ struct kvm_create_guest_memfd {
 	__u64 reserved[6];
 };
 
+#define KVM_TDI_GET_INFO	_IOWR(KVMIO,   0xc5, struct kvm_tdi_info)
+#define KVM_TDI_USER_REQUEST	_IOWR(KVMIO,   0xc6, struct kvm_tdi_user_request)
+
+struct kvm_tdi_info {
+	__u32 func_id;
+	__u64 rsvd;
+	__u64 nonce0;
+	__u64 nonce1;
+	__u64 nonce2;
+	__u64 nonce3;
+};
+
+struct kvm_tdi_user_request {
+	__u32 func_id;
+	__u64 rsvd;
+};
 #endif /* __LINUX_KVM_H */
