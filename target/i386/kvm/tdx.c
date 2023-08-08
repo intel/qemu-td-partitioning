@@ -1654,6 +1654,17 @@ static void tdx_guest_set_vtpm_userid(Object *obj, const char *val, Error **err)
     vms->vtpm_userid = g_strdup(val);
 }
 
+bool tdx_premig_is_done(void)
+{
+    struct kvm_tdx_get_migration_info info;
+
+    memset(&info, 0, sizeof(struct kvm_tdx_get_migration_info));
+    info.version = KVM_TDX_GET_MIGRATION_INFO_VERSION;
+    tdx_vm_ioctl(KVM_TDX_GET_MIGRATION_INFO, 0, &info);
+
+    return !!info.premig_done;
+}
+
 static void tdx_migtd_get_vsockport(Object *obj,
                                      Visitor *v,
                                      const char *name,

@@ -172,6 +172,7 @@ void tdx_apply_xfam_dependencies(CPUState *cpu);
 void tdx_check_minus_features(CPUState *cpu);
 bool tdx_debug_enabled(void);
 hwaddr tdx_remove_stolen_bit(hwaddr gpa);
+bool tdx_premig_is_done(void);
 
 /*interface to vmcall service handler*/
 void tdx_vmcall_service_set_response_state(TdxVmcallServiceItem *vsi,int state);
