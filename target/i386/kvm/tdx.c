@@ -1044,6 +1044,24 @@ static void tdx_post_init_vcpus(void)
     }
 }
 
+static bool tdx_guest_need_prebinding(void)
+{
+    int i;
+    uint64_t *qword = (uint64_t *)tdx_guest->migtd_hash;
+
+    /*
+     * migtd_hash by default is 0 which is deemed as invalid.
+     * Pre-binding happens when user provided a non-0 hash value.
+     */
+    for (i = 0; i < KVM_TDX_SERVTD_HASH_SIZE / sizeof(uint64_t); i++) {
+        if (qword[i] != 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool tdx_guest_need_binding(void)
 {
     /* User has input the non-0 PID of a MigTD */
@@ -1063,6 +1081,22 @@ static void tdx_binding_with_migtd_pid(void)
     r = tdx_vm_ioctl(KVM_TDX_SERVTD_BIND, 0, &servtd);
     if (r) {
         error_report("failed to bind migtd: %d", r);
+    }
+}
+
+static void tdx_binding_with_migtd_hash(void)
+{
+    struct kvm_tdx_servtd servtd;
+    int r;
+
+    servtd.version = KVM_TDX_SERVTD_VERSION;
+    servtd.type = KVM_TDX_SERVTD_TYPE_MIGTD;
+    servtd.attr = tdx_guest->migtd_attr;
+    memcpy(servtd.hash, tdx_guest->migtd_hash, KVM_TDX_SERVTD_HASH_SIZE);
+
+    r = tdx_vm_ioctl(KVM_TDX_SERVTD_PREBIND, 0, &servtd);
+    if (r) {
+        error_report("failed to prebind migtd: %d", r);
     }
 }
 
@@ -1113,6 +1147,8 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
     /* Initial binding needs to be done before TD finalized */
     if (tdx_guest_need_binding()) {
         tdx_binding_with_migtd_pid();
+    } else if (tdx_guest_need_prebinding()) {
+        tdx_binding_with_migtd_hash();
     }
 
     for_each_tdx_fw_entry(tdvf, entry) {
@@ -1253,7 +1289,7 @@ static int setup_td_guest_attributes(X86CPU *x86cpu)
                              TDX_TD_ATTRIBUTES_PKS : 0;
     tdx_guest->attributes |= x86cpu->enable_pmu ? TDX_TD_ATTRIBUTES_PERFMON : 0;
 
-    if (tdx_guest_need_binding()) {
+    if (tdx_guest_need_prebinding() || tdx_guest_need_binding()) {
         tdx_guest->attributes |= TDX_TD_ATTRIBUTES_MIG;
     }
 
@@ -1647,6 +1683,8 @@ static void tdx_guest_init(Object *obj)
     object_property_add_sha384(obj, "mrowner", tdx->mrowner,
                                OBJ_PROP_FLAG_READWRITE);
     object_property_add_sha384(obj, "mrownerconfig", tdx->mrownerconfig,
+                               OBJ_PROP_FLAG_READWRITE);
+    object_property_add_sha384(obj, "migtd-hash", tdx->migtd_hash,
                                OBJ_PROP_FLAG_READWRITE);
     object_property_add_uint64_ptr(obj, "migtd-attr",
                                    &tdx->migtd_attr, OBJ_PROP_FLAG_READWRITE);
