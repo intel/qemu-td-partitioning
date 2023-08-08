@@ -1395,28 +1395,12 @@ static void tdx_guest_region_add(MemoryListener *listener,
     MemoryRegion *mr = section->mr;
     Object *owner = memory_region_owner(mr);
 
-    if (owner && object_dynamic_cast(owner, TYPE_MEMORY_BACKEND) &&
-        object_property_get_bool(owner, "private", NULL) &&
-        mr->ram_block && mr->ram_block->gmem_fd < 0) {
-        struct kvm_create_guest_memfd gmem = {
-            .size = memory_region_size(mr),
-            /* TODO: add property to hostmem backend for huge pmd */
-            .flags = KVM_GUEST_MEMFD_ALLOW_HUGEPAGE,
-        };
-        int fd;
-
-        fd = kvm_vm_ioctl(kvm_state, KVM_CREATE_GUEST_MEMFD, &gmem);
-        if (fd < 0) {
-            fprintf(stderr, "%s: error creating gmem: %s\n", __func__,
-                    strerror(-fd));
-            abort();
-        }
-        memory_region_set_gmem_fd(mr, fd);
+    if (!owner || !object_dynamic_cast(owner, TYPE_MEMORY_BACKEND) ||
+        !object_property_get_bool(owner, "private", NULL)) {
+        return;
     }
 
-    if (memory_region_can_be_private(mr)) {
-        memory_region_set_default_private(mr);
-    }
+    memory_region_gmem_create(mr);
 }
 
 static MemoryListener tdx_memory_listener = {

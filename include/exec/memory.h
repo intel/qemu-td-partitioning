@@ -1413,12 +1413,11 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
                                     ram_addr_t offset,
                                     Error **errp);
 /**
- * memory_region_set_gmem_fd:  Set RAM memory region with a restricted fd.
+ * memory_region_gmem_create:  Create RAM memory region with gmem.
  *
  * @mr: the #MemoryRegion to be set.
- * @fd: the fd to provide restricted memory.
  */
-void memory_region_set_gmem_fd(MemoryRegion *mr, int fd);
+void memory_region_gmem_create(MemoryRegion *mr);
 
 #endif
 
@@ -1798,7 +1797,6 @@ bool memory_region_is_protected(MemoryRegion *mr);
  */
 bool memory_region_can_be_private(MemoryRegion *mr);
 
-void memory_region_set_default_private(MemoryRegion *mr);
 bool memory_region_is_default_private(MemoryRegion *mr);
 
 /**

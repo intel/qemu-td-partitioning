@@ -2640,25 +2640,13 @@ static void kvm_x86_sw_protected_vm_region_add(MemoryListener *listenr,
 {
     MemoryRegion *mr = section->mr;
     Object *owner = memory_region_owner(mr);
-    int fd;
 
-    if (owner && object_dynamic_cast(owner, TYPE_MEMORY_BACKEND) &&
-        object_property_get_bool(owner, "private", NULL) &&
-        mr->ram_block && mr->ram_block->gmem_fd < 0) {
-        struct kvm_create_guest_memfd gmem = {
-            .size = memory_region_size(mr),
-            /* TODO: to decide whether KVM_GUEST_MEMFD_ALLOW_HUGEPAGE is supported */
-            .flags = KVM_GUEST_MEMFD_ALLOW_HUGEPAGE,
-        };
-
-        fd = kvm_vm_ioctl(kvm_state, KVM_CREATE_GUEST_MEMFD, &gmem);
-        if (fd < 0) {
-            error_report("%s: error creating gmem: %s\n", __func__, strerror(-fd));
-            exit(1);
-        }
-        memory_region_set_gmem_fd(mr, fd);
-        memory_region_set_default_private(mr);
+    if (!owner || !object_dynamic_cast(owner, TYPE_MEMORY_BACKEND) ||
+        !object_property_get_bool(owner, "private", NULL)) {
+        return;
     }
+
+    memory_region_gmem_create(mr);
 }
 
 static MemoryListener kvm_x86_sw_protected_vm_memory_listener = {

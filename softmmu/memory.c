@@ -1684,12 +1684,28 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
     memory_region_init_ram_debug_ops(mr);
 }
 
-void memory_region_set_gmem_fd(MemoryRegion *mr, int fd)
+void memory_region_gmem_create(MemoryRegion *mr)
 {
-    if (mr->ram_block) {
-        assert(fd >= 0);
-        mr->ram_block->gmem_fd = fd;
+    int fd;
+    RAMBlock *rb = mr->ram_block;
+    struct kvm_create_guest_memfd gmem = {
+        .size = memory_region_size(mr),
+        /* TODO: add property to hostmem backend for huge pmd */
+        .flags = KVM_GUEST_MEMFD_ALLOW_HUGEPAGE,
+    };
+
+    if (!rb || rb->gmem_fd >= 0) {
+        return;
     }
+
+    fd = kvm_vm_ioctl(kvm_state, KVM_CREATE_GUEST_MEMFD, &gmem);
+    if (fd < 0) {
+        fprintf(stderr, "%s: error creating gmem: %s\n", __func__,
+                strerror(-fd));
+        abort();
+    }
+    rb->gmem_fd = fd;
+    rb->flags |= RAM_DEFAULT_PRIVATE;
 }
 
 #endif
@@ -1917,13 +1933,6 @@ bool memory_region_is_default_private(MemoryRegion *mr)
 {
     return mr->ram_block && mr->ram_block->gmem_fd >= 0 &&
         (mr->ram_block->flags & RAM_DEFAULT_PRIVATE);
-}
-
-void memory_region_set_default_private(MemoryRegion *mr)
-{
-    if (mr->ram_block && mr->ram_block->gmem_fd >= 0) {
-        mr->ram_block->flags |= RAM_DEFAULT_PRIVATE;
-    }
 }
 
 uint8_t memory_region_get_dirty_log_mask(MemoryRegion *mr)
@@ -3703,7 +3712,6 @@ void memory_region_init_ram_gmem(MemoryRegion *mr,
 {
     DeviceState *owner_dev;
     Error *err = NULL;
-    int priv_fd;
 
     memory_region_init_ram_nomigrate(mr, owner, name, size, &err);
     if (err) {
@@ -3711,28 +3719,13 @@ void memory_region_init_ram_gmem(MemoryRegion *mr,
         return;
     }
 
-    if (object_dynamic_cast(OBJECT(current_accel()), TYPE_KVM_ACCEL)) {
-        KVMState *s = KVM_STATE(current_accel());
-        struct kvm_create_guest_memfd gmem = {
-            .size = size,
-            /* TODO: add property to hostmem backend for huge pmd */
-            .flags = KVM_GUEST_MEMFD_ALLOW_HUGEPAGE,
-        };
-
-        priv_fd = kvm_vm_ioctl(s, KVM_CREATE_GUEST_MEMFD, &gmem);
-        if (priv_fd < 0) {
-            fprintf(stderr, "%s: error creating gmem: %s\n", __func__,
-                    strerror(-priv_fd));
-            abort();
-        }
-    } else {
+    if (!object_dynamic_cast(OBJECT(current_accel()), TYPE_KVM_ACCEL)) {
         fprintf(stderr, "%s: gmem unsupported accel: %s\n", __func__,
                 current_accel_name());
         abort();
     }
 
-    memory_region_set_gmem_fd(mr, priv_fd);
-    memory_region_set_default_private(mr);
+    memory_region_gmem_create(mr);
 
     /* This will assert if owner is neither NULL nor a DeviceState.
      * We only want the owner here for the purposes of defining a
