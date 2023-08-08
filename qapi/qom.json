@@ -897,6 +897,10 @@
 #
 # @quote-generation-service: socket address for Quote Generation Service(QGS)
 #
+# @migtd-attr: binding attributes of a migtd
+#
+# @migtd-pid: process id of a migtd to bind
+#
 # Since: 8.2
 ##
 { 'struct': 'TdxGuestProperties',
@@ -907,6 +911,8 @@
             '*mrowner': 'str',
             '*mrownerconfig': 'str',
             '*quote-generation-service': 'str',
+            '*migtd-attr': 'uint64',
+            '*migtd-pid': 'uint32',
             '*vtpm-userid': 'str',
             '*vtpm-type': 'str',
             '*vtpm-path': 'str'  } }

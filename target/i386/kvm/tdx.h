@@ -148,6 +148,9 @@ typedef struct TdxGuest {
     TdxGetQuoteState *get_quote_state;
 
     TdxVmcallService vmcall_service;
+
+    uint32_t migtd_pid;
+    uint64_t migtd_attr;
 } TdxGuest;
 
 #ifdef CONFIG_TDX

@@ -51,10 +51,17 @@
 
 #define TDX_TD_ATTRIBUTES_DEBUG             BIT_ULL(0)
 #define TDX_TD_ATTRIBUTES_SEPT_VE_DISABLE   BIT_ULL(28)
+#define TDX_TD_ATTRIBUTES_MIG               BIT_ULL(29)
 #define TDX_TD_ATTRIBUTES_PKS               BIT_ULL(30)
 #define TDX_TD_ATTRIBUTES_PERFMON           BIT_ULL(63)
 
 #define TDX_ATTRIBUTES_MAX_BITS      64
+
+/*
+ * Class binding and ignore all the related TD fields when calculating
+ * SERVTD_INFO_HASH. See the TDX module ABI spec for details.
+ */
+#define TDX_MIGTD_ATTR_DEFAULT      0x000007ff00000000
 
 /* TDX metadata base field id. */
 #define TDX_METADATA_ATTRIBUTES_FIXED0          0x1900000300000000ULL
@@ -1037,6 +1044,28 @@ static void tdx_post_init_vcpus(void)
     }
 }
 
+static bool tdx_guest_need_binding(void)
+{
+    /* User has input the non-0 PID of a MigTD */
+    return !!tdx_guest->migtd_pid;
+}
+
+static void tdx_binding_with_migtd_pid(void)
+{
+    struct kvm_tdx_servtd servtd;
+    int r;
+
+    servtd.version = KVM_TDX_SERVTD_VERSION;
+    servtd.type = KVM_TDX_SERVTD_TYPE_MIGTD;
+    servtd.attr = tdx_guest->migtd_attr;
+    servtd.pid = tdx_guest->migtd_pid;
+
+    r = tdx_vm_ioctl(KVM_TDX_SERVTD_BIND, 0, &servtd);
+    if (r) {
+        error_report("failed to bind migtd: %d", r);
+    }
+}
+
 static void tdx_guest_init_vmcall_service_vtpm(TdxGuest *tdx);
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
@@ -1080,6 +1109,11 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
     tdvf_hob_create(tdx_guest, tdx_get_hob_entry(tdx_guest));
 
     tdx_post_init_vcpus();
+
+    /* Initial binding needs to be done before TD finalized */
+    if (tdx_guest_need_binding()) {
+        tdx_binding_with_migtd_pid();
+    }
 
     for_each_tdx_fw_entry(tdvf, entry) {
         struct kvm_tdx_init_mem_region mem_region = {
@@ -1218,6 +1252,10 @@ static int setup_td_guest_attributes(X86CPU *x86cpu)
     tdx_guest->attributes |= (env->features[FEAT_7_0_ECX] & CPUID_7_0_ECX_PKS) ?
                              TDX_TD_ATTRIBUTES_PKS : 0;
     tdx_guest->attributes |= x86cpu->enable_pmu ? TDX_TD_ATTRIBUTES_PERFMON : 0;
+
+    if (tdx_guest_need_binding()) {
+        tdx_guest->attributes |= TDX_TD_ATTRIBUTES_MIG;
+    }
 
     return tdx_validate_attributes(tdx_guest);
 }
@@ -1470,6 +1508,43 @@ static const VMStateDescription tdx_guest_vmstate = {
     }
 };
 
+static void tdx_migtd_get_pid(Object *obj, Visitor *v,
+                              const char *name, void *opaque, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+
+    visit_type_uint32(v, name, &tdx->migtd_pid, errp);
+}
+
+static void tdx_migtd_set_pid(Object *obj, Visitor *v,
+                              const char *name, void *opaque, Error **errp)
+{
+    TdxGuest *tdx = TDX_GUEST(obj);
+    uint32_t val;
+
+    if (!visit_type_uint32(v, name, &val, errp)) {
+        return;
+    }
+
+    tdx->migtd_pid = val;
+
+    /*
+     * !tdx_guest indicates that TD hasn't been running. This is the initial
+     * binding case where tdx_migtd_set_pid is called from QEMU booting command
+     * when launching the TD. Binding on TD launch is performed after TD is
+     * initialized (in tdx_finalize_vm).
+     */
+    if (!tdx_guest) {
+        return;
+    }
+
+    /*
+     * TD has been running. This is the late binding case where
+     * tdx_migtd_set_pid is called from qom-set command.
+     */
+    tdx_binding_with_migtd_pid();
+}
+
 /* tdx guest */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    tdx_guest,
@@ -1556,6 +1631,7 @@ static void tdx_guest_init(Object *obj)
     qemu_mutex_init(&tdx->lock);
 
     tdx->attributes = TDX_TD_ATTRIBUTES_SEPT_VE_DISABLE;
+    tdx->migtd_attr = TDX_MIGTD_ATTR_DEFAULT;
 
     object_property_add_bool(obj, "sept-ve-disable",
                              tdx_guest_get_sept_ve_disable,
@@ -1572,6 +1648,10 @@ static void tdx_guest_init(Object *obj)
                                OBJ_PROP_FLAG_READWRITE);
     object_property_add_sha384(obj, "mrownerconfig", tdx->mrownerconfig,
                                OBJ_PROP_FLAG_READWRITE);
+    object_property_add_uint64_ptr(obj, "migtd-attr",
+                                   &tdx->migtd_attr, OBJ_PROP_FLAG_READWRITE);
+    object_property_add(obj, "migtd-pid", "uint32", tdx_migtd_get_pid,
+                        tdx_migtd_set_pid, NULL, NULL);
 
     tdx->quote_generation_str = NULL;
     tdx->quote_generation = NULL;
