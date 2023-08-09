@@ -1683,6 +1683,9 @@ static void tdx_handle_map_gpa(X86CPU *cpu, struct kvm_tdx_vmcall *vmcall)
         if (retry) {
             vmcall->status_code = TDG_VP_VMCALL_RETRY;
             vmcall->out_r11 = gpa + size;
+            if (!private) {
+                vmcall->out_r11 |= shared_bit;
+            }
         } else {
             vmcall->status_code = TDG_VP_VMCALL_SUCCESS;
         }
