@@ -1313,6 +1313,7 @@ int tdx_pre_create_vcpu(CPUState *cpu)
         struct kvm_tdx_init_vm init_vm;
         uint8_t data[16 * 1024];
     } init_vm;
+    uint32_t flags = 0;
     int r = 0;
 
     qemu_mutex_lock(&tdx_guest->lock);
@@ -1377,8 +1378,12 @@ int tdx_pre_create_vcpu(CPUState *cpu)
     memcpy(init_vm.init_vm.mrowner, tdx_guest->mrowner, sizeof(tdx_guest->mrowner));
     memcpy(init_vm.init_vm.mrownerconfig, tdx_guest->mrownerconfig, sizeof(tdx_guest->mrownerconfig));
 
+    if (runstate_check(RUN_STATE_INMIGRATE)) {
+        flags = KVM_TDX_INIT_VM_F_POST_INIT;
+    }
+
     do {
-        r = tdx_vm_ioctl(KVM_TDX_INIT_VM, 0, &init_vm);
+        r = tdx_vm_ioctl(KVM_TDX_INIT_VM, flags, &init_vm);
     } while (r == -EAGAIN);
     if (r < 0) {
         error_report("KVM_TDX_INIT_VM failed %s", strerror(-r));
