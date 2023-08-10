@@ -564,6 +564,8 @@ struct kvm_pmu_event_filter {
 #define KVM_X86_SW_PROTECTED_VM   1
 #define KVM_X86_TDX_VM      2
 
+#define TDX_MIG_EXPORT_TRACK_F_IN_ORDER_DONE (1UL << 63)
+
 /* Trust Domain eXtension sub-ioctl() commands. */
 enum kvm_tdx_cmd_id {
 	KVM_TDX_CAPABILITIES = 0,
