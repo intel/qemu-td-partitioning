@@ -103,6 +103,7 @@ bool kvm_direct_msi_allowed;
 bool kvm_ioeventfd_any_length_allowed;
 bool kvm_msi_use_devid;
 bool kvm_has_guest_debug;
+int kvm_vm_type;
 static int kvm_sstep_flags;
 static bool kvm_immediate_exit;
 static uint64_t kvm_supported_memory_attributes;
@@ -2652,6 +2653,7 @@ static int kvm_init(MachineState *ms)
     } else if (mc->kvm_type) {
         type = mc->kvm_type(ms, NULL);
     }
+    kvm_vm_type = type;
 
     do {
         ret = kvm_ioctl(s, KVM_CREATE_VM, type);
