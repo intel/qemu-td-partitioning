@@ -213,6 +213,13 @@ MigrationIncomingState *migration_incoming_get_current(void)
     return current_incoming;
 }
 
+bool migration_incoming_has_failed(void)
+{
+    MigrationIncomingState *mis = migration_incoming_get_current();
+
+    return mis->state == MIGRATION_STATUS_FAILED;
+}
+
 void migration_incoming_transport_cleanup(MigrationIncomingState *mis)
 {
     if (mis->socket_address_list) {

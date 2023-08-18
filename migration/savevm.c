@@ -2811,6 +2811,8 @@ retry:
 out:
     if (ret < 0) {
         qemu_file_set_error(f, ret);
+        migrate_set_state(&mis->state, MIGRATION_STATUS_ACTIVE,
+                          MIGRATION_STATUS_FAILED);
 
         /* Cancel bitmaps incoming regardless of recovery */
         dirty_bitmap_mig_cancel_incoming();
