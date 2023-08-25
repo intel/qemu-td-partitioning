@@ -274,6 +274,47 @@ int iommufd_backend_alloc_hwpt(int iommufd, uint32_t dev_id,
     return !ret ? 0 : -errno;
 }
 
+int iommufd_backend_alloc_pasid(int iommufd, uint32_t min, uint32_t max,
+                                bool identical, uint32_t *pasid)
+{
+    int ret;
+    uint32_t upasid = *pasid;
+    struct iommu_alloc_pasid alloc = {
+            .size = sizeof(alloc),
+            .flags = identical ? IOMMU_ALLOC_PASID_IDENTICAL : 0,
+            .range.min = min,
+            .range.max = max,
+            .pasid = upasid,
+    };
+
+    ret = ioctl(iommufd, IOMMU_ALLOC_PASID, &alloc);
+    if (ret) {
+        error_report("IOMMU_ALLOC_PASID failed: %s", strerror(errno));
+    } else {
+        *pasid = alloc.pasid;
+    }
+    trace_iommufd_backend_alloc_pasid(iommufd, min, max,
+                                      identical, upasid, *pasid, ret);
+    return !ret ? 0 : -errno;
+}
+
+int iommufd_backend_free_pasid(int iommufd, uint32_t pasid)
+{
+    int ret;
+    struct iommu_free_pasid free = {
+            .size = sizeof(free),
+            .flags = 0,
+            .pasid = pasid,
+    };
+
+    ret = ioctl(iommufd, IOMMU_FREE_PASID, &free);
+    if (ret) {
+        error_report("IOMMU_FREE_PASID failed: %s", strerror(errno));
+    }
+    trace_iommufd_backend_free_pasid(iommufd, pasid, ret);
+    return !ret ? 0 : -errno;
+}
+
 int iommufd_backend_invalidate_cache(int iommufd, uint32_t hwpt_id,
                                      uint32_t len, void *data_ptr)
 {

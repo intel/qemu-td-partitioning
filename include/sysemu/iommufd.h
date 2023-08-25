@@ -51,6 +51,9 @@ int iommufd_backend_alloc_hwpt(int iommufd, uint32_t dev_id,
                                uint32_t pt_id, uint32_t hwpt_type,
                                uint32_t len, void *data_ptr,
                                uint32_t *out_hwpt);
+int iommufd_backend_alloc_pasid(int iommufd, uint32_t min, uint32_t max,
+                                bool identical, uint32_t *pasid);
+int iommufd_backend_free_pasid(int iommufd, uint32_t pasid);
 int iommufd_backend_invalidate_cache(int iommufd, uint32_t hwpt_id,
                                      uint32_t len, void *data_ptr);
 #endif
