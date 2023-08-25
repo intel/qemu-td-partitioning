@@ -172,3 +172,12 @@ int cgs_mig_savevm_state_ram_abort(void)
 
     return ret;
 }
+
+void cgs_mig_savevm_state_cleanup(void)
+{
+    if (!cgs_mig.savevm_state_cleanup) {
+        return;
+    }
+
+    cgs_mig.savevm_state_cleanup();
+}
