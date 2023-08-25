@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /* Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES.
  */
-#ifndef _IOMMUFD_H
-#define _IOMMUFD_H
+#ifndef _UAPI_IOMMUFD_H
+#define _UAPI_IOMMUFD_H
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
@@ -49,8 +49,13 @@ enum {
 	IOMMUFD_CMD_GET_HW_INFO,
 	IOMMUFD_CMD_RESV_IOVA_RANGES,
 	IOMMUFD_CMD_HWPT_INVALIDATE,
+	IOMMUFD_CMD_ALLOC_PASID,
+	IOMMUFD_CMD_FREE_PASID,
 	IOMMUFD_CMD_SET_DEV_DATA,
 	IOMMUFD_CMD_UNSET_DEV_DATA,
+	IOMMUFD_CMD_HWPT_SET_DIRTY,
+	IOMMUFD_CMD_HWPT_GET_DIRTY_IOVA,
+	IOMMUFD_CMD_DEVICE_GET_CAPS,
 };
 
 /**
@@ -350,6 +355,15 @@ struct iommu_vfio_ioas {
 	__u16 __reserved;
 };
 #define IOMMU_VFIO_IOAS _IO(IOMMUFD_TYPE, IOMMUFD_CMD_VFIO_IOAS)
+
+/**
+ * enum iommufd_hwpt_alloc_flags - Flags for alloc hwpt
+ * @IOMMU_HWPT_ALL_ENFORCE_DIRTY: Dirty tracking support for device IOMMU is
+ *                                enforced on device attachment
+ */
+enum iommufd_hwpt_alloc_flags {
+	IOMMU_HWPT_ALLOC_ENFORCE_DIRTY = 1 << 0,
+};
 
 /**
  * enum iommu_hwpt_vtd_s1_flags - Intel VT-d stage-1 page table
@@ -754,6 +768,42 @@ struct iommu_hwpt_invalidate {
 };
 #define IOMMU_HWPT_INVALIDATE _IO(IOMMUFD_TYPE, IOMMUFD_CMD_HWPT_INVALIDATE)
 
+/*
+ * struct iommu_alloc_pasid - ioctl(IOMMU_ALLOC_PASID)
+ * @size: sizeof(struct iommu_alloc_pasid)
+ * @flags: optional flags.
+ * @min: min pasid
+ * @max: max pasid
+ * @pasid: input a user pasid and output the allocated host pasid
+ *
+ * Allocate a host pasid within [@min, @max]
+ */
+struct iommu_alloc_pasid {
+	__u32 size;
+	__u32 flags;
+#define IOMMU_ALLOC_PASID_IDENTICAL (1 << 0)
+	struct {
+		__u32   min;
+		__u32   max;
+	} range;
+	__u32 pasid;
+};
+#define IOMMU_ALLOC_PASID _IO(IOMMUFD_TYPE, IOMMUFD_CMD_ALLOC_PASID)
+
+/*
+ * struct iommu_free_pasid - ioctl(IOMMU_FREE_PASID)
+ * @size: sizeof(struct iommu_free_pasid)
+ * @flags: must be 0
+ * @pasid: the pasid to be freed
+ *
+ */
+struct iommu_free_pasid {
+	__u32 size;
+	__u32 flags;
+	__u32 pasid;
+};
+#define IOMMU_FREE_PASID _IO(IOMMUFD_TYPE, IOMMUFD_CMD_FREE_PASID)
+
 /**
  * struct iommu_dev_data_arm_smmuv3 - ARM SMMUv3 specific device data
  * @sid: The Stream ID that is assigned in the user space
@@ -795,4 +845,99 @@ struct iommu_unset_dev_data {
 	__u32 dev_id;
 };
 #define IOMMU_UNSET_DEV_DATA _IO(IOMMUFD_TYPE, IOMMUFD_CMD_UNSET_DEV_DATA)
+
+/**
+ * enum iommufd_set_dirty_flags - Flags for steering dirty tracking
+ * @IOMMU_DIRTY_TRACKING_DISABLED: Disables dirty tracking
+ * @IOMMU_DIRTY_TRACKING_ENABLED: Enables dirty tracking
+ */
+enum iommufd_hwpt_set_dirty_flags {
+	IOMMU_DIRTY_TRACKING_DISABLED = 0,
+	IOMMU_DIRTY_TRACKING_ENABLED = 1,
+};
+
+/**
+ * struct iommu_hwpt_set_dirty - ioctl(IOMMU_HWPT_SET_DIRTY)
+ * @size: sizeof(struct iommu_hwpt_set_dirty)
+ * @flags: Flags to control dirty tracking status.
+ * @hwpt_id: HW pagetable ID that represents the IOMMU domain.
+ *
+ * Toggle dirty tracking on an HW pagetable.
+ */
+struct iommu_hwpt_set_dirty {
+	__u32 size;
+	__u32 flags;
+	__u32 hwpt_id;
+	__u32 __reserved;
+};
+#define IOMMU_HWPT_SET_DIRTY _IO(IOMMUFD_TYPE, IOMMUFD_CMD_HWPT_SET_DIRTY)
+
+/**
+ * struct iommufd_dirty_bitmap - Dirty IOVA tracking bitmap
+ * @iova: base IOVA of the bitmap
+ * @length: IOVA size
+ * @page_size: page size granularity of each bit in the bitmap
+ * @data: bitmap where to set the dirty bits. The bitmap bits each
+ * represent a page_size which you deviate from an arbitrary iova.
+ * Checking a given IOVA is dirty:
+ *
+ *  data[(iova / page_size) / 64] & (1ULL << (iova % 64))
+ */
+struct iommufd_dirty_data {
+	__aligned_u64 iova;
+	__aligned_u64 length;
+	__aligned_u64 page_size;
+	__aligned_u64 *data;
+};
+
+/**
+ * enum iommufd_get_dirty_iova_flags - Flags for getting dirty bits
+ * @IOMMU_GET_DIRTY_IOVA_NO_CLEAR: Just read the PTEs without clearing any dirty
+ *                                 bits metadata. This flag can be passed in the
+ *                                 expectation where the next operation is
+ *                                 an unmap of the same IOVA range.
+ *
+ */
+enum iommufd_hwpt_get_dirty_iova_flags {
+	IOMMU_GET_DIRTY_IOVA_NO_CLEAR = 1,
+};
+
+/**
+ * struct iommu_hwpt_get_dirty_iova - ioctl(IOMMU_HWPT_GET_DIRTY_IOVA)
+ * @size: sizeof(struct iommu_hwpt_get_dirty_iova)
+ * @hwpt_id: HW pagetable ID that represents the IOMMU domain.
+ * @flags: Flags to control dirty tracking status.
+ * @bitmap: Bitmap of the range of IOVA to read out
+ */
+struct iommu_hwpt_get_dirty_iova {
+	__u32 size;
+	__u32 hwpt_id;
+	__u32 flags;
+	__u32 __reserved;
+	struct iommufd_dirty_data bitmap;
+};
+#define IOMMU_HWPT_GET_DIRTY_IOVA _IO(IOMMUFD_TYPE, IOMMUFD_CMD_HWPT_GET_DIRTY_IOVA)
+
+
+/**
+ * enum iommufd_device_caps
+ * @IOMMU_CAP_DIRTY_TRACKING: IOMMU device support for dirty tracking
+ */
+enum iommufd_device_caps {
+	IOMMUFD_CAP_DIRTY_TRACKING = 1 << 0,
+};
+
+/*
+ * struct iommu_device_caps - ioctl(IOMMU_DEVICE_GET_CAPS)
+ * @size: sizeof(struct iommu_device_caps)
+ * @dev_id: the device to query
+ * @caps: IOMMU capabilities of the device
+ */
+struct iommu_device_get_caps {
+	__u32 size;
+	__u32 dev_id;
+	__aligned_u64 out_caps;
+};
+#define IOMMU_DEVICE_GET_CAPS _IO(IOMMUFD_TYPE, IOMMUFD_CMD_DEVICE_GET_CAPS)
+
 #endif
