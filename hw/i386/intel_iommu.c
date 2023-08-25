@@ -2858,8 +2858,14 @@ static int vtd_device_attach_pgtbl(VTDIOMMUFDDevice *vtd_idev,
         hwpt->iommufd = idev->iommufd->fd;
     }
 
-    ret = iommufd_device_attach_hwpt(idev, hwpt->hwpt_id);
-    printf("%s, try to bind PASID %u - 2, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
+    if (vtd_pasid_as->pasid == rid_pasid) {
+        ret = iommufd_device_attach_hwpt(idev, hwpt->hwpt_id);
+        printf("%s, try to bind PASID %u - 1, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
+    } else {
+        ret = iommufd_device_pasid_attach_hwpt(idev, vtd_pasid_as->pasid, hwpt->hwpt_id);
+        printf("%s, try to bind PASID %u - 2, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
+    }
+
     if (ret) {
         if (vtd_pe_pgtt_is_flt(pe)) {
             vtd_destroy_fl_hwpt(idev, hwpt);
@@ -2884,13 +2890,14 @@ static int vtd_device_detach_pgtbl(IOMMUFDDevice *idev,
         return 0;
     }
 
-    if (vtd_pasid_as->pasid != rid_pasid) {
-        printf("%s, don't support non-rid_pasid so far\n", __func__);
-        return 0;
+    if (vtd_pasid_as->pasid == rid_pasid) {
+        ret = iommufd_device_attach_hwpt(idev, idev->def_hwpt_id);
+        printf("%s, try to rebind PASID %u - 1, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
+    } else {
+        ret = iommufd_device_pasid_detach_hwpt(idev, vtd_pasid_as->pasid);
+        printf("%s, try to rebind PASID %u - 2, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
     }
 
-    ret = iommufd_device_attach_hwpt(idev, idev->def_hwpt_id);
-    printf("%s, try to rebind PASID %u - 1, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
     if (!ret) {
         if (vtd_pe_pgtt_is_flt(cached_pe)) {
             vtd_destroy_fl_hwpt(idev, hwpt);
