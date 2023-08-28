@@ -25,6 +25,7 @@
 #include "hw/i386/x86-iommu.h"
 #include "qemu/iova-tree.h"
 #include "qom/object.h"
+#include "sysemu/iommufd.h"
 
 #define TYPE_INTEL_IOMMU_DEVICE "intel-iommu"
 OBJECT_DECLARE_SIMPLE_TYPE(IntelIOMMUState, INTEL_IOMMU_DEVICE)
@@ -42,7 +43,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(IntelIOMMUState, INTEL_IOMMU_DEVICE)
 #define VTD_SID_TO_BUS(sid)         (((sid) >> 8) & 0xff)
 #define VTD_SID_TO_DEVFN(sid)       ((sid) & 0xff)
 
-#define DMAR_REG_SIZE               0x230
+#define DMAR_REG_SIZE               0xF00
 #define VTD_HOST_AW_39BIT           39
 #define VTD_HOST_AW_48BIT           48
 #define VTD_HOST_ADDRESS_WIDTH      VTD_HOST_AW_39BIT
@@ -66,6 +67,7 @@ typedef struct VTDIOMMUFDDevice VTDIOMMUFDDevice;
 typedef struct VTDPASIDCacheEntry VTDPASIDCacheEntry;
 typedef struct VTDPASIDAddressSpace VTDPASIDAddressSpace;
 typedef struct VTDHwpt VTDHwpt;
+typedef struct VTDPASIDStoreEntry VTDPASIDStoreEntry;
 
 /* Context-Entry */
 struct VTDContextEntry {
@@ -285,6 +287,12 @@ union VTD_IR_MSIAddress {
 /* When IR is enabled, all MSI/MSI-X data bits should be zero */
 #define VTD_IR_MSI_DATA          (0)
 
+struct VTDPASIDStoreEntry {
+    uint32_t gpasid;
+    uint32_t hpasid;
+    bool allocated;
+};
+
 /* The iommu (DMAR) device state struct */
 struct IntelIOMMUState {
     X86IOMMUState x86_iommu;
@@ -354,6 +362,14 @@ struct IntelIOMMUState {
     bool dma_translation;           /* Whether DMA translation supported */
     bool pasid;                     /* Whether to support PASID */
 
+    /* Virtual Command Register */
+    uint64_t vccap;                 /* The value of vcmd capability reg */
+    uint64_t vcrsp;                 /* Current value of VCMD RSP REG */
+    /* /dev/iommu interface */
+    IOMMUFDBackend *iommufd;
+    bool non_identical_pasid;       /* False: guest PASID equals to host PASID */
+    uint32_t next_idx;
+    VTDPASIDStoreEntry vtd_pasid[1024][1024];
     bool cap_finalized;             /* Whether VTD capability finalized */
     /*
      * Protects IOMMU states in general.  Currently it protects the
