@@ -6069,11 +6069,14 @@ static void vtd_cap_init(IntelIOMMUState *s)
     if (s->scalable_mode && !s->scalable_modern) {
         s->ecap |= VTD_ECAP_SMTS | VTD_ECAP_SRS | VTD_ECAP_SLTS;
     } else if (s->scalable_mode && s->scalable_modern) {
-        s->ecap |= VTD_ECAP_SMTS | VTD_ECAP_SRS;
+        s->ecap |= VTD_ECAP_SMTS | VTD_ECAP_SRS |
+                   VTD_ECAP_PSS(VTD_PASID_SS) | VTD_ECAP_VCS  |
+                   VTD_ECAP_EAFS;
         if (s->aw_bits == VTD_HOST_AW_48BIT) {
             s->ecap |= VTD_ECAP_FLTS;
             s->cap |= VTD_CAP_FL1GP;
         }
+        s->vccap |= VTD_VCCAP_PAS;
     }
 
     if (s->snoop_control) {
