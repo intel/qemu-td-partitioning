@@ -373,10 +373,10 @@ enum {
 };
 
 #define VTD_VCMD_CMD_MASK               0xffUL
-#define VTD_VCMD_PASID_VALUE(val)       (((val) >> 8) & 0xfffff)
+#define VTD_VCMD_PASID_VALUE(val)       (((val) >> 16) & 0xfffff)
 
-#define VTD_VCRSP_RSLT(val)             ((val) << 8)
-#define VTD_VCRSP_SC(val)               (((val) & 0x3) << 1)
+#define VTD_VCRSP_RSLT(val)             ((val) << 16)
+#define VTD_VCRSP_SC(val)               (((val) & 0xff) >> 1)
 
 #define VTD_VCMD_UNDEFINED_CMD          1ULL
 #define VTD_VCMD_NO_AVAILABLE_PASID     2ULL
