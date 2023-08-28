@@ -85,12 +85,12 @@
 #define DMAR_MTRRCAP_REG_HI     0x104
 #define DMAR_MTRRDEF_REG        0x108 /* MTRR default type */
 #define DMAR_MTRRDEF_REG_HI     0x10c
-#define DMAR_VCCAP_REG          0xE00 /* Virtual Command Capability Register */
-#define DMAR_VCCAP_REG_HI       0xE04
-#define DMAR_VCMD_REG           0xE10 /* Virtual Command Register */
-#define DMAR_VCMD_REG_HI        0xE14
-#define DMAR_VCRSP_REG          0xE20 /* Virtual Command Reponse Register */
-#define DMAR_VCRSP_REG_HI       0xE24
+#define DMAR_VCCAP_REG          0xE30 /* Virtual Command Capability Register */
+#define DMAR_VCCAP_REG_HI       0xE34
+#define DMAR_VCMD_REG           0xE00 /* Virtual Command Register */
+#define DMAR_VCMD_REG_HI        0xE04
+#define DMAR_VCRSP_REG          0xE10 /* Virtual Command Reponse Register */
+#define DMAR_VCRSP_REG_HI       0xE14
 
 /* IOTLB registers */
 #define DMAR_IOTLB_REG_OFFSET   0xf0 /* Offset to the IOTLB registers */
