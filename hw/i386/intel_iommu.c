@@ -2940,11 +2940,6 @@ static int vtd_bind_guest_pasid(VTDPASIDAddressSpace *vtd_pasid_as,
         return -1;
     }
 
-    if (vtd_pasid_as->pasid != rid_pasid) {
-        printf("%s, don't support non-rid_pasid so far\n", __func__);
-        return -1;
-    }
-
     switch (op) {
     case VTD_PASID_UPDATE:
     case VTD_PASID_BIND:
@@ -5319,6 +5314,8 @@ static Property vtd_properties[] = {
     DEFINE_PROP_BOOL("x-pasid-mode", IntelIOMMUState, pasid, false),
     DEFINE_PROP_BOOL("dma-drain", IntelIOMMUState, dma_drain, true),
     DEFINE_PROP_BOOL("dma-translation", IntelIOMMUState, dma_translation, true),
+    DEFINE_PROP_LINK("iommufd", IntelIOMMUState, iommufd,
+                     TYPE_IOMMUFD_BACKEND, IOMMUFDBackend *),
     DEFINE_PROP_END_OF_LIST(),
 };
 
