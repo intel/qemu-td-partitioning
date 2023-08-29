@@ -1303,12 +1303,16 @@ static int ram_save_page(RAMState *rs, PageSearchStatus *pss)
 }
 
 static int ram_save_multifd_page(QEMUFile *file, RAMBlock *block,
-                                 ram_addr_t offset)
+                                 ram_addr_t offset, hwaddr private_gpa)
 {
-    if (multifd_queue_page(file, block, offset) < 0) {
+    if (multifd_queue_page(file, block, offset, private_gpa) < 0) {
         return -1;
     }
-    stat64_add(&mig_stats.normal_pages, 1);
+    if (private_gpa != CGS_PRIVATE_GPA_INVALID) {
+        stat64_add(&mig_stats.cgs_private_pages, 1);
+    } else {
+        stat64_add(&mig_stats.normal_pages, 1);
+    }
 
     return 1;
 }
@@ -2181,7 +2185,8 @@ static int ram_save_target_page_shared(RAMState *rs, PageSearchStatus *pss)
      * still see partially copied pages which is data corruption.
      */
     if (migrate_multifd() && !migration_in_postcopy()) {
-        return ram_save_multifd_page(pss->pss_channel, block, offset);
+        return ram_save_multifd_page(pss->pss_channel, block, offset,
+                                     CGS_PRIVATE_GPA_INVALID);
     }
 
     return ram_save_page(rs, pss);
@@ -2202,6 +2207,11 @@ static int ram_save_target_page_private(PageSearchStatus *pss)
             stat64_add(&mig_stats.cgs_epochs, 1);
             pss->cgs_start_epoch = false;
         }
+    }
+
+    if (migrate_multifd() && !migration_in_postcopy()) {
+        return ram_save_multifd_page(pss->pss_channel, block, offset,
+                                     pss->cgs_private_gpa);
     }
 
     res = cgs_mig_savevm_state_ram(pss->pss_channel, block, offset,
@@ -3936,8 +3946,8 @@ void colo_flush_ram_cache(void)
     trace_colo_flush_ram_cache_end();
 }
 
-static int ram_load_update_cgs_bmap(RAMBlock *block, ram_addr_t offset,
-                                    bool is_private)
+int ram_load_update_cgs_bmap(RAMBlock *block, ram_addr_t offset,
+                             bool is_private)
 {
     unsigned long bit = offset >> TARGET_PAGE_BITS;
     bool was_private;

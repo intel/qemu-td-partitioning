@@ -96,4 +96,7 @@ void ram_write_tracking_prepare(void);
 int ram_write_tracking_start(void);
 void ram_write_tracking_stop(void);
 
+int ram_load_update_cgs_bmap(RAMBlock *block, ram_addr_t offset,
+                             bool is_private);
+
 #endif
