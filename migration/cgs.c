@@ -51,18 +51,18 @@ bool cgs_mig_is_ready(void)
 int cgs_mig_savevm_state_setup(QEMUFile *f)
 {
     int ret;
+    uint32_t nr_channels = 1, nr_pages = 1;
 
     if (!cgs_mig.savevm_state_setup) {
         return 0;
     }
 
-    if (migrate_multifd() || migrate_postcopy_ram()) {
-        error_report("multifd and postcopy not supported by cgs yet");
-        qemu_file_set_error(f, -EINVAL);
-        return -EINVAL;
+    if (migrate_multifd()) {
+        nr_channels = migrate_multifd_channels();
+        nr_pages = MULTIFD_PACKET_SIZE / TARGET_PAGE_SIZE;
     }
 
-    ret = cgs_mig.savevm_state_setup();
+    ret = cgs_mig.savevm_state_setup(nr_channels, nr_pages);
     cgs_check_error(f, ret);
 
     return ret;
@@ -120,6 +120,13 @@ long cgs_ram_save_start_epoch(QEMUFile *f)
 
     if (!cgs_mig.savevm_state_ram_start_epoch) {
         return 0;
+    }
+
+    if (migrate_multifd() && !migration_in_postcopy()) {
+        ret = multifd_send_sync_main(f);
+        if (ret < 0) {
+            return ret;
+        }
     }
 
     ram_save_cgs_epoch_header(f);
@@ -188,18 +195,18 @@ void cgs_mig_savevm_state_cleanup(void)
 int cgs_mig_loadvm_state_setup(QEMUFile *f)
 {
     int ret;
+    uint32_t nr_channels = 1, nr_pages = 1;
 
     if (!cgs_mig.loadvm_state_setup) {
         return 0;
     }
 
-    if (migrate_multifd() || migrate_postcopy_ram()) {
-        error_report("multifd and postcopy not supported by cgs yet");
-        qemu_file_set_error(f, -EINVAL);
-        return -EINVAL;
+    if (migrate_multifd()) {
+        nr_channels = migrate_multifd_channels();
+        nr_pages = MULTIFD_PACKET_SIZE / TARGET_PAGE_SIZE;
     }
 
-    ret = cgs_mig.loadvm_state_setup();
+    ret = cgs_mig.loadvm_state_setup(nr_channels, nr_pages);
     cgs_check_error(f, ret);
 
     return ret;
@@ -226,6 +233,34 @@ void cgs_mig_loadvm_state_cleanup(void)
     }
 
     cgs_mig.loadvm_state_cleanup();
+}
+
+int cgs_mig_multifd_send_prepare(MultiFDSendParams *p, Error **errp)
+{
+
+    if (!cgs_mig.multifd_send_prepare) {
+        return 0;
+    }
+
+    return cgs_mig.multifd_send_prepare(p, errp);
+}
+
+int cgs_mig_multifd_recv_pages(MultiFDRecvParams *p, Error **errp)
+{
+    if (!cgs_mig.multifd_recv_pages) {
+        return 0;
+    }
+
+    return cgs_mig.multifd_recv_pages(p, errp);
+}
+
+uint32_t cgs_mig_iov_num(uint32_t page_batch_num)
+{
+    if (!cgs_mig.iov_num) {
+        return page_batch_num;
+    }
+
+    return cgs_mig.iov_num(page_batch_num);
 }
 
 void cgs_mig_init(void)

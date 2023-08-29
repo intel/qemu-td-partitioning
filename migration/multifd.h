@@ -62,6 +62,7 @@ typedef struct {
     uint64_t packet_num;
     /* offset of each page */
     ram_addr_t *offset;
+    hwaddr *private_gpa;
     RAMBlock *block;
 } MultiFDPages_t;
 

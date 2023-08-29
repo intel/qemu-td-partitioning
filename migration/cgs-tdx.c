@@ -28,6 +28,12 @@
 
 #define TDX_MIG_F_CONTINUE 0x1
 
+/* MBMD, gpa_list and 2 pages of mac_list */
+#define MULTIFD_EXTRA_IOV_NUM 4
+
+/* Bytes of the MBMD for memory page, calculated from the spec */
+#define TDX_MBMD_MEM_BYTES 48
+
 typedef struct TdxMigHdr {
     uint16_t flags;
     uint16_t buf_list_num;
@@ -59,6 +65,7 @@ typedef struct TdxMigStream {
 } TdxMigStream;
 
 typedef struct TdxMigState {
+    uint32_t nr_streams;
     TdxMigStream *streams;
 } TdxMigState;
 
@@ -325,9 +332,9 @@ static int tdx_mig_stream_create(TdxMigStream *stream)
     return 0;
 }
 
-static int tdx_mig_stream_setup(void)
+static int tdx_mig_do_stream_setup(TdxMigStream *stream, uint32_t nr_pages)
 {
-    TdxMigStream *stream;
+    int ret;
     struct kvm_dev_tdx_mig_attr tdx_mig_attr;
     struct kvm_device_attr attr = {
         .group = KVM_DEV_TDX_MIG_ATTR,
@@ -336,10 +343,6 @@ static int tdx_mig_stream_setup(void)
     };
     size_t map_size;
     off_t map_offset;
-    int ret;
-
-   tdx_mig.streams = g_malloc0(sizeof(struct TdxMigStream) * 1);
-    stream = &tdx_mig.streams[0];
 
     ret = tdx_mig_stream_create(stream);
     if (ret) {
@@ -351,7 +354,7 @@ static int tdx_mig_stream_setup(void)
      * TD private page export/import. Currently, TD private pages are migrated
      * one by one.
      */
-    tdx_mig_attr.buf_list_pages = 1;
+    tdx_mig_attr.buf_list_pages = nr_pages;
     tdx_mig_attr.version = KVM_DEV_TDX_MIG_ATTR_VERSION;
     if (kvm_device_ioctl(stream->fd, KVM_SET_DEVICE_ATTR, &attr) < 0) {
         return -EIO;
@@ -409,6 +412,26 @@ static int tdx_mig_stream_setup(void)
     return 0;
 }
 
+static int tdx_mig_stream_setup(uint32_t nr_channels, uint32_t nr_pages)
+{
+    TdxMigStream *stream;
+    int i, ret;
+
+    tdx_mig.streams = g_malloc0(sizeof(struct TdxMigStream) * nr_channels);
+
+    for (i = 0; i < nr_channels; i++) {
+        stream = &tdx_mig.streams[i];
+        ret = tdx_mig_do_stream_setup(stream, nr_pages);
+        if (!ret) {
+            tdx_mig.nr_streams++;
+        } else {
+            return ret;
+        }
+    }
+
+    return 0;
+}
+
 static void tdx_mig_stream_cleanup(TdxMigStream *stream)
 {
     struct kvm_dev_tdx_mig_attr tdx_mig_attr;
@@ -446,8 +469,13 @@ static void tdx_mig_stream_cleanup(TdxMigStream *stream)
 
 static void tdx_mig_cleanup(void)
 {
-    tdx_mig_stream_cleanup(&tdx_mig.streams[0]);
+    int i;
 
+    for (i = 0; i < tdx_mig.nr_streams; i++) {
+        tdx_mig_stream_cleanup(&tdx_mig.streams[i]);
+    }
+
+    tdx_mig.nr_streams = 0;
     g_free(tdx_mig.streams);
     tdx_mig.streams = NULL;
 }
@@ -540,6 +568,119 @@ static int tdx_mig_loadvm_state(QEMUFile *f)
     return ret;
 }
 
+static uint32_t tdx_mig_iov_num(uint32_t page_batch_num)
+{
+    uint32_t iov_num;
+
+    /* The TDX migration architecture supports up to 512 pages */
+    if (page_batch_num > 512) {
+        error_report("%u is larger than the max (512)", page_batch_num);
+        return 0;
+    }
+
+    if (page_batch_num > 256) {
+        iov_num = MULTIFD_EXTRA_IOV_NUM + page_batch_num;
+    } else {
+        /* One less MAC page is used */
+        iov_num = MULTIFD_EXTRA_IOV_NUM - 1 + page_batch_num;
+    }
+
+    return iov_num;
+}
+
+static int tdx_mig_multifd_send_prepare(MultiFDSendParams *p, Error **errp)
+{
+    TdxMigStream *stream = &tdx_mig.streams[p->id];
+    MultiFDPages_t *pages = p->pages;
+    uint32_t i, iovs_num = p->iovs_num, packet_size = 0;
+    uint64_t page_num = pages->num;
+    int ret;
+
+    tdx_mig_gpa_list_setup((GpaListEntry *)stream->gpa_list,
+                           pages->private_gpa, page_num, GPA_LIST_OP_EXPORT);
+
+    ret = tdx_mig_stream_ioctl(stream, KVM_TDX_MIG_EXPORT_MEM, 0, &page_num);
+    if (ret) {
+        return ret;
+    }
+    page_num = pages->num;
+
+    /* MBMD */
+    p->iov[iovs_num].iov_base = stream->mbmd;
+    p->iov[iovs_num++].iov_len = TDX_MBMD_MEM_BYTES;
+    packet_size = TDX_MBMD_MEM_BYTES;
+
+    /* GPA list */
+    p->iov[iovs_num].iov_base = stream->gpa_list;
+    p->iov[iovs_num].iov_len = sizeof(GpaListEntry) * page_num;
+    packet_size += p->iov[iovs_num++].iov_len;
+
+    /* TODO: check if there is a 2nd MAC list */
+    /* MAC list */
+    p->iov[iovs_num].iov_base = stream->mac_list;
+    p->iov[iovs_num].iov_len = sizeof(Int128) * page_num;
+    packet_size += p->iov[iovs_num++].iov_len;
+
+    /* Buffer list */
+    for (i = 0; i < page_num; i++) {
+        p->iov[iovs_num].iov_base = stream->buf_list + TARGET_PAGE_SIZE * i;
+        p->iov[iovs_num].iov_len = TARGET_PAGE_SIZE;
+        packet_size += p->iov[iovs_num++].iov_len;
+    }
+
+    p->iovs_num = iovs_num;
+    p->next_packet_size = packet_size;
+    return 0;
+}
+
+static int tdx_mig_multifd_recv_pages(MultiFDRecvParams *p, Error **errp)
+{
+    TdxMigStream *stream = &tdx_mig.streams[p->id];
+    uint32_t i, iovs_num = 0;
+    uint64_t gfn_num = p->normal_num;
+    uint8_t mbmd_type;
+    int ret;
+
+    /* MBMD */
+    p->iov[iovs_num].iov_base = stream->mbmd;
+    p->iov[iovs_num++].iov_len = TDX_MBMD_MEM_BYTES;
+
+    /* GPA list */
+    p->iov[iovs_num].iov_base = stream->gpa_list;
+    p->iov[iovs_num++].iov_len = sizeof(GpaListEntry) * gfn_num;
+
+    /* MAC list */
+    p->iov[iovs_num].iov_base = stream->mac_list;
+    p->iov[iovs_num++].iov_len = sizeof(Int128) * gfn_num;
+
+    /* Buffer list */
+    for (i = 0; i < gfn_num; i++) {
+        p->iov[iovs_num].iov_base = stream->buf_list + TARGET_PAGE_SIZE * i;
+        p->iov[iovs_num++].iov_len = TARGET_PAGE_SIZE;
+    }
+
+    ret = qio_channel_readv_all(p->c, p->iov, iovs_num, errp);
+    if (ret) {
+        error_report("%s: channel read: %s",  __func__, strerror(ret));
+        return ret;
+    }
+
+    mbmd_type = tdx_mig_stream_get_mbmd_type(stream);
+    if (mbmd_type != KVM_TDX_MIG_MBMD_TYPE_MEMORY_STATE) {
+        error_report("%s: packet received wrong, mbmd=%d",
+                      __func__, mbmd_type);
+        return -EINVAL;
+    }
+
+    ret = tdx_mig_stream_ioctl(stream, KVM_TDX_MIG_IMPORT_MEM, 0, &gfn_num);
+    if (ret) {
+        error_report("%s failed: %s, gfn_num=%lu",
+                     __func__, strerror(ret), gfn_num);
+    }
+
+    return ret;
+}
+
 void tdx_mig_init(CgsMig *cgs_mig)
 {
     cgs_mig->is_ready = tdx_mig_is_ready;
@@ -555,4 +696,7 @@ void tdx_mig_init(CgsMig *cgs_mig)
     cgs_mig->loadvm_state_setup = tdx_mig_stream_setup;
     cgs_mig->loadvm_state = tdx_mig_loadvm_state;
     cgs_mig->loadvm_state_cleanup = tdx_mig_loadvm_state_cleanup;
+    cgs_mig->multifd_send_prepare = tdx_mig_multifd_send_prepare;
+    cgs_mig->multifd_recv_pages = tdx_mig_multifd_recv_pages;
+    cgs_mig->iov_num = tdx_mig_iov_num;
 }
