@@ -44,6 +44,12 @@
 #include "sysemu/iommufd.h"
 #include <sys/ioctl.h>
 
+#include "migration/migration.h"
+#include "migration/qemu-file.h"
+#include "migration/register.h"
+#include "migration/blocker.h"
+#include "migration/misc.h"
+
 /* context entry operations */
 #define VTD_CE_GET_RID2PASID(ce) \
     ((ce)->val[1] & VTD_SM_CONTEXT_ENTRY_RID2PASID_MASK)
@@ -6014,6 +6020,45 @@ static int vtd_iommu_notify_flag_changed(IOMMUMemoryRegion *iommu,
     return 0;
 }
 
+static void vtd_replay_pasid_allocation(IntelIOMMUState *s)
+{
+    int j, k;
+
+    for (j = 0; j < 1024; j++) {
+        for (k = 0; k < 1024; k++) {
+            VTDPASIDStoreEntry *entry = &s->vtd_pasid[j][k];
+            int ret;
+
+            if (entry->allocated) {
+                ret = __vtd_alloc_host_pasid(s, !s->non_identical_pasid, &entry->hpasid);
+                if (ret) {
+                    error_report_once("%s: gpasid: %u failed to get"
+                          " correspond hpasid", __func__, entry->gpasid);
+                    continue;
+                }
+                printf("%s, alloc gpasid: %u, hpasid: %d, j/k (%d/%d)\n",
+                       __func__, entry->gpasid, entry->hpasid, j, k);
+            }
+        }
+    }
+}
+
+static void vtd_migration_replay_pasid(IntelIOMMUState *s)
+{
+    VTDPASIDCacheInfo pc_info = { .error_happened = false,
+                                  .type = VTD_PASID_CACHE_GLOBAL_INV };
+    vtd_iommu_lock(s);
+    /*
+     * Replay pasid related stuffs:
+     * a) replay pasid allocation according to the allocated
+     *     per-vm pasids (gpasid);
+     * b) replay pasid bindings;
+     */
+    vtd_replay_pasid_allocation(s);
+    vtd_replay_guest_pasid_bindings(s, &pc_info);
+    vtd_iommu_unlock(s);
+}
+
 static int vtd_post_load(void *opaque, int version_id)
 {
     IntelIOMMUState *iommu = opaque;
@@ -6036,33 +6081,130 @@ static int vtd_post_load(void *opaque, int version_id)
      */
     vtd_switch_address_space_all(iommu);
 
+    vtd_migration_replay_pasid(iommu);
+
     return 0;
 }
 
-static const VMStateDescription vtd_vmstate = {
-    .name = "iommu-intel",
-    .version_id = 1,
-    .minimum_version_id = 1,
-    .priority = MIG_PRI_IOMMU,
-    .post_load = vtd_post_load,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT64(root, IntelIOMMUState),
-        VMSTATE_UINT64(intr_root, IntelIOMMUState),
-        VMSTATE_UINT64(iq, IntelIOMMUState),
-        VMSTATE_UINT32(intr_size, IntelIOMMUState),
-        VMSTATE_UINT16(iq_head, IntelIOMMUState),
-        VMSTATE_UINT16(iq_tail, IntelIOMMUState),
-        VMSTATE_UINT16(iq_size, IntelIOMMUState),
-        VMSTATE_UINT16(next_frcd_reg, IntelIOMMUState),
-        VMSTATE_UINT8_ARRAY(csr, IntelIOMMUState, DMAR_REG_SIZE),
-        VMSTATE_UINT8(iq_last_desc_type, IntelIOMMUState),
-        VMSTATE_UNUSED(1),      /* bool root_extended is obsolete by VT-d */
-        VMSTATE_BOOL(dmar_enabled, IntelIOMMUState),
-        VMSTATE_BOOL(qi_enabled, IntelIOMMUState),
-        VMSTATE_BOOL(intr_enabled, IntelIOMMUState),
-        VMSTATE_BOOL(intr_eime, IntelIOMMUState),
-        VMSTATE_END_OF_LIST()
+static int vtd_save_setup(QEMUFile *f, void *opaque)
+{
+    int ret;
+
+    qemu_put_be64(f, 0);
+
+    ret = qemu_file_get_error(f);
+    if (ret) {
+        return ret;
     }
+    return 0;
+}
+
+static void vtd_save_cleanup(void *opaque)
+{
+}
+
+static int vtd_save_iterate(QEMUFile *f, void *opaque)
+{
+    qemu_put_be64(f, 0);
+    return 1; // for empty implementation, return 1 to let iterate go forward
+}
+
+static int vtd_save_complete_precopy(QEMUFile *f, void *opaque)
+{
+    IntelIOMMUState *s = opaque;
+    uint64_t data_size = sizeof(*s);
+    int ret;
+
+    qemu_put_be64(f, data_size);
+    qemu_put_buffer(f, (uint8_t *)s, data_size);
+
+    ret = qemu_file_get_error(f);
+    if (ret) {
+        return ret;
+    }
+
+    return 0;
+}
+
+static int vtd_load_setup(QEMUFile *f, void *opaque)
+{
+    return 0;
+}
+
+static int vtd_load_cleanup(void *opaque)
+{
+    return 0;
+}
+
+static int vtd_load_state(QEMUFile *f, void *opaque, int version_id)
+{
+    IntelIOMMUState *iommu, *s = opaque;
+    uint64_t data_size;
+    int ret = 0;
+
+    data_size = qemu_get_be64(f);
+    if (data_size == 0) {
+        return 0;
+    }
+
+    if (data_size != sizeof(*iommu)) {
+        printf("%s ERROR data_size: %lu/%lu are incompatible!\n",
+                __func__, data_size, sizeof(iommu));
+        return -EINVAL;
+    }
+
+    iommu = g_malloc0(sizeof(*iommu));
+
+    ret = qemu_get_buffer(f, (uint8_t *)iommu, data_size);
+    if (ret == 0) {
+        printf("%s Failed to get data\n", __func__);
+        return -EINVAL;
+    }
+
+    ret = qemu_file_get_error(f);
+    if (ret) {
+        printf("%s - qemu_file_get_error, ret: %d\n", __func__, ret);
+        return ret;
+    }
+
+    /* Config fileds in IntelIOMMUState per source configuration */
+    s->root = iommu->root;
+    s->intr_root = iommu->intr_root;
+    s->iq = iommu->iq;
+    s->intr_size = iommu->intr_size;
+    s->iq_head = iommu->iq_head;
+    s->iq_tail = iommu->iq_tail;
+    s->iq_size = iommu->iq_size;
+    s->next_frcd_reg = iommu->next_frcd_reg;
+    memcpy(&s->csr, &iommu->csr, DMAR_REG_SIZE);
+    s->iq_last_desc_type = iommu->iq_last_desc_type;
+    s->dmar_enabled = iommu->dmar_enabled;
+    s->qi_enabled = iommu->qi_enabled;
+    s->intr_enabled = iommu->intr_enabled;
+    s->intr_eime = iommu->intr_eime;
+    s->iq_dw = iommu->iq_dw;
+    s->pqa = iommu->pqa;
+    s->prq_head = iommu->prq_head;
+    s->prq_tail = iommu->prq_tail;
+    s->prq_entry_size_order = iommu->prq_entry_size_order;
+    s->prq_qsize = iommu->prq_qsize;
+    s->prq_nb_entries = iommu->prq_nb_entries;
+    s->prq_entry_count = iommu->prq_entry_count;
+    memcpy(&s->vtd_pasid, &iommu->vtd_pasid, (1 << 20) * sizeof(VTDPASIDStoreEntry));
+
+    vtd_post_load(s, 0);
+
+    return 0;
+}
+
+static SaveVMHandlers savevm_vtd_handlers = {
+    .save_setup = vtd_save_setup,
+    .save_cleanup = vtd_save_cleanup,
+    .save_live_iterate = vtd_save_iterate,
+    .save_live_complete_precopy = vtd_save_complete_precopy,
+    .load_setup = vtd_load_setup,
+    .load_cleanup = vtd_load_cleanup,
+    .load_state = vtd_load_state,
 };
 
 static const MemoryRegionOps vtd_mem_ops = {
@@ -7127,6 +7269,12 @@ static Notifier vtd_machine_done_notify = {
     .notify = vtd_machine_done_hook,
 };
 
+static void vtd_migration_probe(IntelIOMMUState *s, Error **errp)
+{
+    register_savevm_live("intel-vtd-3.2", -1, 1, &savevm_vtd_handlers,
+                         s);
+}
+
 static void vtd_realize(DeviceState *dev, Error **errp)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
@@ -7213,6 +7361,7 @@ static void vtd_realize(DeviceState *dev, Error **errp)
     /* Pseudo address space under root PCI bus. */
     x86ms->ioapic_as = vtd_host_dma_iommu(bus, s, Q35_PSEUDO_DEVFN_IOAPIC);
     qemu_add_machine_init_done_notifier(&vtd_machine_done_notify);
+    vtd_migration_probe(s, errp);
 }
 
 static void vtd_class_init(ObjectClass *klass, void *data)
@@ -7221,7 +7370,6 @@ static void vtd_class_init(ObjectClass *klass, void *data)
     X86IOMMUClass *x86_class = X86_IOMMU_DEVICE_CLASS(klass);
 
     dc->reset = vtd_reset;
-    dc->vmsd = &vtd_vmstate;
     device_class_set_props(dc, vtd_properties);
     dc->hotpluggable = false;
     x86_class->realize = vtd_realize;
