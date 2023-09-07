@@ -6817,8 +6817,9 @@ static int vtd_dev_set_iommu_device(PCIBus *bus, void *opaque,
     }
 
     vtd_idev = g_hash_table_lookup(s->vtd_iommufd_dev, &key);
-
-    assert(!vtd_idev);
+    if (vtd_idev) {
+        goto out;
+    }
 
     new_key = g_malloc(sizeof(*new_key));
     new_key->bus = bus;
@@ -6833,6 +6834,7 @@ static int vtd_dev_set_iommu_device(PCIBus *bus, void *opaque,
 
     g_hash_table_insert(s->vtd_iommufd_dev, new_key, vtd_idev);
 
+out:
     vtd_iommu_unlock(s);
 
     return 0;
