@@ -6805,6 +6805,10 @@ static int vtd_dev_set_iommu_device(PCIBus *bus, void *opaque,
     };
     struct vtd_as_key *new_key;
 
+    /* only modern scalable supports set_iommu_context */
+    if(!s->scalable_modern)
+        return 0;
+
     assert(0 <= devfn && devfn < PCI_DEVFN_MAX);
 
     vtd_iommu_lock(s);
@@ -6844,6 +6848,10 @@ static void vtd_dev_unset_iommu_device(PCIBus *bus, void *opaque, int devfn)
         .bus = bus,
         .devfn = devfn,
     };
+
+    /* only modern scalable supports set_iommu_context */
+    if(!s->scalable_modern)
+        return;
 
     assert(0 <= devfn && devfn < PCI_DEVFN_MAX);
 
