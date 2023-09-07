@@ -2972,11 +2972,6 @@ static void vtd_put_s2_hwpt(IOMMUFDDevice *idev)
     iommufd->s2_hwpt = NULL;
 }
 
-/* TODO: it is identical pasid now so we do not need convert hpasid
- * to gpasid so far. But we need do it when supporting non-identical
- * pasid.
- */
-#if 0
 /* Must be called with IOMMU lock held */
 static int vtd_gpasid_find_by_host(IntelIOMMUState *s, uint32_t *pasid)
 {
@@ -3000,7 +2995,6 @@ static int vtd_gpasid_find_by_host(IntelIOMMUState *s, uint32_t *pasid)
 
     return -ENODEV;
 }
-#endif
 
 static int vtd_report_iommu_fault(VTDPASIDAddressSpace *vtd_pasid_as,
                                   int count, struct iommu_fault *buf)
@@ -3037,17 +3031,11 @@ static int vtd_report_iommu_fault(VTDPASIDAddressSpace *vtd_pasid_as,
         prq.rid = PCI_BUILD_BDF(bus_num, devfn);
         printf("%s h/v (%u, %u), rid: %u\n", __func__, fault->prm.pasid, prq.pasid, prq.rid);
         pasid = fault->prm.pasid;
-        /* TODO: it is identical pasid now so we do not need convert hpasid
-         * to gpasid so far. But we need do it when supporting non-identical
-         * pasid.
-         */
-#if 0
         ret = vtd_gpasid_find_by_host(s, &pasid);
         if (ret < 0) {
             printf("%s failed to find gpasid for hpasid: %d\n", __func__, fault->prm.pasid);
             break;
         }
-#endif
         prq.pasid = pasid;
         prq.exe_req = (fault->prm.perm & IOMMU_FAULT_PERM_EXEC) ? 1 : 0;
         prq.pm_req = (fault->prm.perm & IOMMU_FAULT_PERM_PRIV) ? 1 : 0;
@@ -4936,6 +4924,7 @@ static int vtd_dev_send_page_response(IntelIOMMUState *s, PCIBus *bus,
         .devfn = devfn,
     };
 
+    vtd_gpasid_find_by_host(s, &pasid);
     vtd_iommu_lock(s);
     vtd_pasid_as = vtd_find_pasid_as(s, bus, devfn, pasid);
     if (!vtd_pasid_as) {
