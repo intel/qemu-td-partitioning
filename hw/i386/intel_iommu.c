@@ -3326,6 +3326,7 @@ static int vtd_device_detach_pgtbl(IOMMUFDDevice *idev,
     VTDHwpt *hwpt = &vtd_pasid_as->hwpt;
     VTDPASIDEntry *cached_pe = vtd_pasid_as->pasid_cache_entry.cache_filled ?
                        &vtd_pasid_as->pasid_cache_entry.pasid_entry : NULL;
+    uint32_t hpasid = 0;
     int ret;
 
     if (!cached_pe ||
@@ -3333,12 +3334,20 @@ static int vtd_device_detach_pgtbl(IOMMUFDDevice *idev,
         return 0;
     }
 
-    if (vtd_pasid_as->pasid == rid_pasid) {
+    hpasid = vtd_pasid_as->pasid;
+    printf("%s, vtd_hpasid_find_by_guest gpasid=%u- 1\n", __func__, vtd_pasid_as->pasid);
+    ret = vtd_hpasid_find_by_guest(vtd_pasid_as->iommu_state, &hpasid);
+    printf("%s, vtd_hpasid_find_by_guest hpasid %u - 2\n", __func__, hpasid);
+    if (ret || hpasid == rid_pasid) {
+        hpasid = vtd_pasid_as->pasid;
+    }
+
+    if (hpasid == rid_pasid) {
         ret = iommufd_device_attach_hwpt(idev, idev->def_hwpt_id);
-        printf("%s, try to rebind PASID %u - 1, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
+        printf("%s, try to rebind PASID %u - 1, ret: %d\n", __func__, hpasid, ret);
     } else {
-        ret = iommufd_device_pasid_detach_hwpt(idev, vtd_pasid_as->pasid);
-        printf("%s, try to rebind PASID %u - 2, ret: %d\n", __func__, vtd_pasid_as->pasid, ret);
+        ret = iommufd_device_pasid_detach_hwpt(idev, hpasid);
+        printf("%s, try to rebind PASID %u - 2, ret: %d\n", __func__, hpasid, ret);
     }
 
     if (!ret) {
@@ -4382,7 +4391,7 @@ static void vtd_replay_guest_pasid_bindings(IntelIOMMUState *s,
                                             VTDPASIDCacheInfo *pc_info)
 {
     VTDIOMMUFDDevice *vtd_idev;
-    int start = 0, end = 1; //only rid2pasid is supported
+    int start = 0, end = VTD_HPASID_MAX;
     VTDPASIDCacheInfo walk_info;
 
     switch (pc_info->type) {
