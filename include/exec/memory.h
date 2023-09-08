@@ -241,6 +241,8 @@ typedef struct IOMMUTLBEvent {
 /* RAM is default private */
 #define RAM_DEFAULT_PRIVATE     (1 << 10)
 
+void ram_set_default_shared(void);
+
 static inline void iommu_notifier_init(IOMMUNotifier *n, IOMMUNotify fn,
                                        IOMMUNotifierFlag flags,
                                        hwaddr start, hwaddr end,

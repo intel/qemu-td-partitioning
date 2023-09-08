@@ -42,6 +42,7 @@ static unsigned memory_region_transaction_depth;
 static bool memory_region_update_pending;
 static bool ioeventfd_update_pending;
 unsigned int global_dirty_tracking;
+static bool ram_default_shared;
 
 static QTAILQ_HEAD(, MemoryListener) memory_listeners
     = QTAILQ_HEAD_INITIALIZER(memory_listeners);
@@ -1684,6 +1685,11 @@ void memory_region_init_ram_from_fd(MemoryRegion *mr,
     memory_region_init_ram_debug_ops(mr);
 }
 
+void ram_set_default_shared(void)
+{
+    ram_default_shared = true;
+}
+
 void memory_region_gmem_create(MemoryRegion *mr)
 {
     int fd;
@@ -1705,7 +1711,9 @@ void memory_region_gmem_create(MemoryRegion *mr)
         abort();
     }
     rb->gmem_fd = fd;
-    rb->flags |= RAM_DEFAULT_PRIVATE;
+    if (!ram_default_shared) {
+        rb->flags |= RAM_DEFAULT_PRIVATE;
+    }
     rb->cgs_bmap = bitmap_new(rb->max_length >> TARGET_PAGE_BITS);
 }
 
