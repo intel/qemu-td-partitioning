@@ -1129,11 +1129,11 @@ FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
     [FEAT_7_1_EDX] = {
         .type = CPUID_FEATURE_WORD,
         .feat_names = {
-            NULL, NULL, "avx512-vnni-int8", NULL,
+            NULL, "avx512-vnni-fp16", "avx512-vnni-int8", "avx512-ne-convert",
             "avx-vnni-int8", "avx-ne-convert", NULL, NULL,
             NULL, NULL, "avx-vnni-int16", NULL,
             NULL, NULL, "prefetchiti", NULL,
-            NULL, NULL, NULL, NULL,
+            "avx512-bf16-ne", NULL, NULL, NULL,
             NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL,

@@ -998,8 +998,12 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 /* AVX512 MEDIAX Instructions*/
 #define CPUID_7_1_EAX_AVX512_MEDIAX     (1U << 28)
 
+/* AVX512 VNNI FP16 Instructions */
+#define CPUID_7_1_EDX_AVX512_VNNI_FP16  (1U << 1)
 /* AVX512 VNNI INT8 Instructions */
 #define CPUID_7_1_EDX_AVX512_VNNI_INT8  (1U << 2)
+/* AVX512 NE CONVERT Instructions */
+#define CPUID_7_1_EDX_AVX512_NE_CONVERT (1U << 3)
 /* Support for VPDPB[SU,UU,SS]D[,S] */
 #define CPUID_7_1_EDX_AVX_VNNI_INT8     (1U << 4)
 /* AVX NE CONVERT Instructions */
@@ -1008,6 +1012,8 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_1_EDX_AVX_VNNI_INT16    (1U << 10)
 /* PREFETCHIT0/1 Instructions */
 #define CPUID_7_1_EDX_PREFETCHITI       (1U << 14)
+/* AVX512 BF16 NE Instructions */
+#define CPUID_7_1_EDX_AVX512_BF16_NE    (1U << 16)
 
 /* Do not exhibit MXCSR Configuration Dependent Timing (MCDT) behavior */
 #define CPUID_7_2_EDX_MCDT_NO           (1U << 5)
