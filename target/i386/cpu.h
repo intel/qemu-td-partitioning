@@ -1008,6 +1008,12 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_1_EDX_AVX_VNNI_INT8     (1U << 4)
 /* AVX NE CONVERT Instructions */
 #define CPUID_7_1_EDX_AVX_NE_CONVERT    (1U << 5)
+/* AMX TRANSPOSE Instructions */
+#define CPUID_7_1_EDX_AMX_TRANSPOSE     (1U << 6)
+/* AMX TF32 Instructions */
+#define CPUID_7_1_EDX_AMX_TF32          (1U << 7)
+/* AMX AVX512 Instructions */
+#define CPUID_7_1_EDX_AMX_AVX512        (1U << 9)
 /* AVX VNNI INT16 Instructions */
 #define CPUID_7_1_EDX_AVX_VNNI_INT16    (1U << 10)
 /* PREFETCHIT0/1 Instructions */
