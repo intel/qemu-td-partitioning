@@ -665,6 +665,7 @@ typedef enum FeatureWord {
     FEAT_XSAVE_XSS_HI,     /* CPUID[EAX=0xd,ECX=1].EDX */
     FEAT_7_1_EDX,       /* CPUID[EAX=7,ECX=1].EDX */
     FEAT_7_2_EDX,       /* CPUID[EAX=7,ECX=2].EDX */
+    FEAT_7_1_EBX,       /* CPUID[EAX=7,ECX=1].EBX */
     FEATURE_WORDS,
 } FeatureWord;
 
@@ -977,6 +978,8 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_1_EAX_SM3               (1U << 1)
 /* SM4 Instructions */
 #define CPUID_7_1_EAX_SM4               (1U << 2)
+/* RAO INT Instructions */
+#define CPUID_7_1_EAX_RAO_INT           (1U << 3)
 /* AVX VNNI Instruction */
 #define CPUID_7_1_EAX_AVX_VNNI          (1U << 4)
 /* AVX512 BFloat16 Instruction */
@@ -999,6 +1002,11 @@ uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
 #define CPUID_7_1_EAX_AVX512_MEDIAX     (1U << 28)
 /* MOVRS Instructions */
 #define CPUID_7_1_EAX_MOVRS             (1U << 31)
+
+/* AVX512 RAO FP Instructions */
+#define CPUID_7_1_EBX_AVX512_RAO_FP     (1U << 30)
+/* AVX RAO FP Instructions */
+#define CPUID_7_1_EBX_AVX_RAO_FP        (1U << 31)
 
 /* AVX512 VNNI FP16 Instructions */
 #define CPUID_7_1_EDX_AVX512_VNNI_FP16  (1U << 1)
