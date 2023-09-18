@@ -4004,6 +4004,7 @@ static int ram_load_precopy(QEMUFile *f)
     while (!ret && !(flags & RAM_SAVE_FLAG_EOS)) {
         ram_addr_t addr, total_ram_bytes;
         void *host = NULL, *host_bak = NULL;
+        bool need_sync = false;
         uint8_t ch;
 
         /*
@@ -4037,9 +4038,7 @@ static int ram_load_precopy(QEMUFile *f)
                                                     RAM_CHANNEL_PRECOPY);
             bool is_private = flags & RAM_SAVE_FLAG_CGS_STATE;
 
-            if (!is_private) {
-                host = host_from_ram_block_offset(block, addr);
-            }
+            host = host_from_ram_block_offset(block, addr);
 
             /*
              * After going into COLO stage, we should not load the page
@@ -4064,7 +4063,7 @@ static int ram_load_precopy(QEMUFile *f)
                     host_bak = colo_cache_from_block_offset(block, addr, false);
                 }
             }
-            if (!is_private && !host) {
+            if (!host) {
                 error_report("Illegal RAM offset " RAM_ADDR_FMT, addr);
                 ret = -EINVAL;
                 break;
@@ -4176,10 +4175,19 @@ static int ram_load_precopy(QEMUFile *f)
             break;
 
         case RAM_SAVE_FLAG_CGS_EPOCH:
+            need_sync = true;
+            QEMU_FALLTHROUGH;
         case RAM_SAVE_FLAG_CGS_STATE:
+            if (need_sync) {
+                multifd_recv_barrier();
+            }
             if (cgs_mig_loadvm_state(f) < 0) {
                 error_report(" Failed to load cgs state");
                 ret = -EINVAL;
+            }
+
+            if (need_sync) {
+                multifd_recv_unbarrier();
             }
             break;
 
