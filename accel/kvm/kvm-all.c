@@ -1511,7 +1511,8 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
         }
 
         if (memory_region_is_default_private(mr)) {
-            err = kvm_set_memory_attributes_private(start_addr, slot_size);
+            err = kvm_convert_memory_private_mr(start_addr,
+                                                slot_size, true, false);
             if (err) {
                 error_report("%s: failed to set memory attribute private: %s\n",
                              __func__, strerror(-err));
@@ -3074,13 +3075,65 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
+int kvm_convert_memory_private_mr(hwaddr start, hwaddr size,
+                                  bool to_private, bool need_discard)
+{
+    int ret;
+    ram_addr_t offset;
+    RAMBlock *rb = qemu_ram_block_from_hwaddr(start, size, &offset);
+    if (!rb) {
+        return -1;
+    }
+
+    if (to_private) {
+        ret = kvm_set_memory_attributes_private(start, size);
+    } else {
+        ret = kvm_set_memory_attributes_shared(start, size);
+    }
+
+    if (ret) {
+        return ret;
+    }
+
+    if (need_discard) {
+        /*
+         * With KVM_SET_MEMORY_ATTRIBUTES by kvm_set_memory_attributes(),
+         * operation on underlying file descriptor is only for releasing
+         * unnecessary pages.
+         */
+        ram_block_convert_range(rb, offset, size, to_private);
+    }
+
+    ram_block_update_cgs_bmap(rb, offset, size, to_private);
+    return 0;
+}
+
+static int kvm_convert_memory_shared_mr(MemoryRegion *mr, hwaddr start,
+                                        hwaddr size, bool to_private)
+{
+    /*
+     * Because vMMIO region must be shared, guest TD may convert vMMIO
+     * region to shared explicitly.  Don't complain such case.  See
+     * memory_region_type() for checking if the region is MMIO region.
+     */
+    if (to_private ||
+        memory_region_is_ram(mr) ||
+        memory_region_is_ram_device(mr) ||
+        memory_region_is_rom(mr) ||
+        memory_region_is_romd(mr)) {
+        warn_report("Convert non guest-memfd backed memory region"
+                    "(0x%"HWADDR_PRIx" ,+ 0x%"HWADDR_PRIx") of %s to %s",
+                    start, size, mr->name, to_private ? "private" : "shared");
+        return -1;
+    }
+
+    return 0;
+}
+
 int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
 {
     MemoryRegionSection section;
-    void *addr;
-    RAMBlock *rb;
-    ram_addr_t offset;
-    int ret = -1;
+    int ret = 0;
 
     trace_kvm_convert_memory(start, size, to_private ? "shared_to_private" : "private_to_shared");
     section = memory_region_find(get_system_memory(), start, size);
@@ -3094,59 +3147,24 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
          * OVMF assigns 32bit PCI MMIO region to
          * [top of low memory: typically 2GB=0xC000000,  0xFC00000)
          */
-        if (!to_private) {
-            ret = 0;
-        }
-        return ret;
-    }
-
-    if (memory_region_can_be_private(section.mr) || memory_region_is_private_mmio(section.mr)) {
         if (to_private) {
-            ret = kvm_set_memory_attributes_private(start, size);
-        } else {
-            ret = kvm_set_memory_attributes_shared(start, size);
+            ret = -1;
         }
-
-        if (ret) {
-            return ret;
-        }
-
-        addr = memory_region_get_ram_ptr(section.mr) +
-               section.offset_within_region;
-        rb = qemu_ram_block_from_host(addr, false, &offset);
-        memory_region_convert_mem_attr(&section, !to_private);
-
-        if (memory_region_is_private_mmio(section.mr)) {
-            ret = 0;
-        } else {
-            /*
-            * With KVM_SET_MEMORY_ATTRIBUTES by kvm_set_memory_attributes(),
-            * operation on underlying file descriptor is only for releasing
-            * unnecessary pages.
-            */
-            ram_block_convert_range(rb, offset, size, to_private);
-        }
-    } else {
-        MemoryRegion *mr = section.mr;
-
-        /*
-         * Because vMMIO region must be shared, guest TD may convert vMMIO
-         * region to shared explicitly.  Don't complain such case.  See
-         * memory_region_type() for checking if the region is MMIO region.
-         */
-        if (to_private ||
-            memory_region_is_ram(mr) ||
-            memory_region_is_ram_device(mr) ||
-            memory_region_is_rom(mr) ||
-            memory_region_is_romd(mr)) {
-            warn_report("Convert non guest-memfd backed memory region (0x%"HWADDR_PRIx" ,+ 0x%"HWADDR_PRIx") of %s to %s",
-                        start, size, mr->name, to_private ? "private" : "shared");
-	    } else {
-		    ret = 0;
-	    }
-
+        goto out;
     }
 
+    if (memory_region_can_be_private(section.mr) ||
+        memory_region_is_private_mmio(section.mr)) {
+        bool need_discard = !memory_region_is_private_mmio(section.mr);
+
+        ret = kvm_convert_memory_private_mr(start, size, to_private,
+                                            need_discard);
+    } else {
+        ret = kvm_convert_memory_shared_mr(section.mr,
+                                           start, size, to_private);
+    }
+
+out:
     memory_region_unref(section.mr);
     return ret;
 }

@@ -2257,6 +2257,26 @@ found:
     return block;
 }
 
+RAMBlock *qemu_ram_block_from_hwaddr(hwaddr start, hwaddr size,
+                                     ram_addr_t *offset)
+{
+    MemoryRegionSection section;
+    RAMBlock *rb;
+    void *addr;
+
+    section = memory_region_find(get_system_memory(), start, size);
+    if (!section.mr) {
+        return NULL;
+    }
+    addr = memory_region_get_ram_ptr(section.mr) +
+           section.offset_within_region;
+    rb = qemu_ram_block_from_host(addr, false, offset);
+
+    memory_region_unref(section.mr);
+
+    return rb;
+}
+
 /*
  * Finds the named RAMBlock
  *
@@ -3876,7 +3896,7 @@ bool ram_block_discard_is_required(void)
 int ram_block_convert_range(RAMBlock *rb, uint64_t start, size_t length,
                             bool shared_to_private)
 {
-    int fd, ret;
+    int fd;
 
     if (!rb || rb->gmem_fd < 0) {
         return -1;
@@ -3906,17 +3926,22 @@ int ram_block_convert_range(RAMBlock *rb, uint64_t start, size_t length,
         fd = rb->gmem_fd;
     }
 
-    ret = ram_block_discard_range_fd(rb, start, length, fd);
-    if (!ret) {
-        uint64_t bit_start = start / rb->page_size;
-        uint64_t bit_length = length / rb->page_size;
+    return ram_block_discard_range_fd(rb, start, length, fd);
+}
 
-        if (shared_to_private) {
-            bitmap_set(rb->cgs_bmap, bit_start, bit_length);
-        } else {
-            bitmap_clear(rb->cgs_bmap, bit_start, bit_length);
-        }
+void ram_block_update_cgs_bmap(RAMBlock *rb, uint64_t start,
+                               size_t length, bool shared_to_private)
+{
+    uint64_t bit_start = start >> TARGET_PAGE_BITS;
+    uint64_t bit_length = length >> TARGET_PAGE_BITS;
+
+    if (!rb->cgs_bmap) {
+        return;
     }
 
-    return ret;
+    if (shared_to_private) {
+        bitmap_set(rb->cgs_bmap, bit_start, bit_length);
+    } else {
+        bitmap_clear(rb->cgs_bmap, bit_start, bit_length);
+    }
 }
