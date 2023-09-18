@@ -1763,7 +1763,7 @@ bool memory_region_is_private_mmio(MemoryRegion *mr);
  * Mark a memory region as private mmio region and backed by a physical device
  *
  * @mr: the region being updated.
- * @private: whether the region is private mmio region backed by a physical device
+ * @private_mmio: whether the region is private mmio region backed by a physical device
  */
 void memory_region_set_private_mmio(MemoryRegion *mr, bool private_mmio);
 
