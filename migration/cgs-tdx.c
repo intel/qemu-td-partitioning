@@ -16,6 +16,7 @@
 #include "cgs.h"
 #include "target/i386/kvm/tdx.h"
 #include "qemu/error-report.h"
+#include "migration/misc.h"
 
 #define KVM_TDX_MIG_MBMD_TYPE_IMMUTABLE_STATE   0
 #define KVM_TDX_MIG_MBMD_TYPE_TD_STATE          1
@@ -25,6 +26,7 @@
 #define KVM_TDX_MIG_MBMD_TYPE_ABORT_TOKEN       33
 
 #define GPA_LIST_OP_EXPORT 1
+#define GPA_LIST_OP_CANCEL 2
 
 #define TDX_MIG_F_CONTINUE 0x1
 
@@ -212,12 +214,22 @@ static long tdx_mig_save_ram(QEMUFile *f, TdxMigStream *stream)
            buf_list_bytes + mac_list_bytes;
 }
 
-static long tdx_mig_savevm_state_ram(QEMUFile *f, hwaddr gpa)
+static long tdx_mig_savevm_state_ram(QEMUFile *f, uint32_t channel_id,
+                                     hwaddr gpa)
 {
-    TdxMigStream *stream = &tdx_mig.streams[0];
+    TdxMigStream *stream = &tdx_mig.streams[channel_id];
 
     tdx_mig_gpa_list_setup((GpaListEntry *)stream->gpa_list,
                            &gpa, 1, GPA_LIST_OP_EXPORT);
+    return tdx_mig_save_ram(f, stream);
+}
+
+static long tdx_mig_savevm_state_ram_cancel(QEMUFile *f, hwaddr gpa)
+{
+    TdxMigStream *stream = &tdx_mig.streams[0];
+
+    tdx_mig_gpa_list_setup((GpaListEntry *)stream->gpa_list, &gpa, 1,
+                           GPA_LIST_OP_CANCEL);
     return tdx_mig_save_ram(f, stream);
 }
 
@@ -504,9 +516,9 @@ static int tdx_mig_savevm_state_ram_abort(void)
     return 0;
 }
 
-static int tdx_mig_loadvm_state(QEMUFile *f)
+static int tdx_mig_loadvm_state(QEMUFile *f, uint32_t channel_id)
 {
-    TdxMigStream *stream = &tdx_mig.streams[0];
+    TdxMigStream *stream = &tdx_mig.streams[channel_id];
     uint64_t mbmd_bytes, buf_list_bytes, mac_list_bytes, gpa_list_bytes;
     uint64_t buf_list_num = 0;
     bool should_continue = true;
@@ -693,6 +705,7 @@ void tdx_mig_init(CgsMig *cgs_mig)
     cgs_mig->savevm_state_end = tdx_mig_savevm_state_end;
     cgs_mig->savevm_state_cleanup = tdx_mig_cleanup;
     cgs_mig->savevm_state_ram_abort = tdx_mig_savevm_state_ram_abort;
+    cgs_mig->savevm_state_ram_cancel = tdx_mig_savevm_state_ram_cancel;
     cgs_mig->loadvm_state_setup = tdx_mig_stream_setup;
     cgs_mig->loadvm_state = tdx_mig_loadvm_state;
     cgs_mig->loadvm_state_cleanup = tdx_mig_loadvm_state_cleanup;

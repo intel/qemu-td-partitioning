@@ -48,6 +48,8 @@
 #include "kvm-cpus.h"
 #include "sysemu/dirtylimit.h"
 #include "qemu/range.h"
+#include "migration/migration.h"
+#include "migration/misc.h"
 
 #include "hw/boards.h"
 #include "sysemu/stats.h"
@@ -1513,8 +1515,8 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
         }
 
         if (memory_region_is_default_private(mr)) {
-            err = kvm_convert_memory_private_mr(start_addr,
-                                                slot_size, true, false);
+            err = kvm_convert_memory_private_mr(start_addr, slot_size, true,
+                                                false, INT_MAX);
             if (err) {
                 error_report("%s: failed to set memory attribute private: %s\n",
                              __func__, strerror(-err));
@@ -3078,14 +3080,33 @@ static void kvm_eat_signals(CPUState *cpu)
     } while (sigismember(&chkset, SIG_IPI));
 }
 
-int kvm_convert_memory_private_mr(hwaddr start, hwaddr size,
-                                  bool to_private, bool need_discard)
+static bool is_postcopy_private_fault(RAMBlock *rb, ram_addr_t offset,
+                                      bool to_private)
+{
+    unsigned long bit = offset >> TARGET_PAGE_BITS;
+
+    if (!to_private || !migration_in_incoming_postcopy()) {
+        return false;
+    }
+
+    return !test_bit(bit, rb->receivedmap);
+}
+
+int kvm_convert_memory_private_mr(hwaddr start, hwaddr size, bool to_private,
+                                  bool need_discard, int cpu_index)
 {
     int ret;
     ram_addr_t offset;
     RAMBlock *rb = qemu_ram_block_from_hwaddr(start, size, &offset);
     if (!rb) {
         return -1;
+    }
+
+    if (is_postcopy_private_fault(rb, offset, to_private)) {
+        assert(cpu_index != INT_MAX);
+        postcopy_add_private_fault_to_pending_list(rb, offset,
+                                                   start, cpu_index);
+        return kvm_set_memory_attributes_private(start, size);
     }
 
     if (to_private) {
@@ -3133,7 +3154,8 @@ static int kvm_convert_memory_shared_mr(MemoryRegion *mr, hwaddr start,
     return 0;
 }
 
-int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
+int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private,
+                       int cpu_index)
 {
     MemoryRegionSection section;
     int ret = 0;
@@ -3161,7 +3183,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
         bool need_discard = !memory_region_is_private_mmio(section.mr);
 
         ret = kvm_convert_memory_private_mr(start, size, to_private,
-                                            need_discard);
+                                            need_discard, cpu_index);
     } else {
         ret = kvm_convert_memory_shared_mr(section.mr,
                                            start, size, to_private);
@@ -3370,7 +3392,9 @@ int kvm_cpu_exec(CPUState *cpu)
                 break;
             }
             ret = kvm_convert_memory(run->memory.gpa, run->memory.size,
-                                     run->memory.flags & KVM_MEMORY_EXIT_FLAG_PRIVATE);
+                                     run->memory.flags &
+                                     KVM_MEMORY_EXIT_FLAG_PRIVATE,
+                                     cpu->cpu_index);
             break;
         default:
             DPRINTF("kvm_arch_handle_exit\n");

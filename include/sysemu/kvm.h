@@ -588,9 +588,10 @@ uint32_t kvm_dirty_ring_size(void);
 int kvm_set_memory_attributes_private(hwaddr start, hwaddr size);
 int kvm_set_memory_attributes_shared(hwaddr start, hwaddr size);
 
-int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private);
-int kvm_convert_memory_private_mr(hwaddr start, hwaddr size,
-                                  bool to_private, bool need_discard);
+int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private,
+                       int cpu_index);
+int kvm_convert_memory_private_mr(hwaddr start, hwaddr size, bool to_private,
+                                  bool need_discard, int cpu_index);
 
 typedef void (*set_memory_region_debug_ops)(void *handle, MemoryRegion *mr);
 void kvm_setup_set_memory_region_debug_ops(struct KVMState *s,

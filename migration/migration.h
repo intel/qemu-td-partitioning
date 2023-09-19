@@ -72,6 +72,15 @@ typedef enum {
     PREEMPT_THREAD_QUIT,
 } PreemptThreadStatus;
 
+typedef struct CgsPrivateFaultReq {
+    RAMBlock *rb;
+    ram_addr_t offset;
+    hwaddr gpa;
+    QemuSemaphore sem;
+
+    QSIMPLEQ_ENTRY(CgsPrivateFaultReq) next_req;
+} CgsPrivateFaultReq;
+
 /* State for the incoming migration */
 struct MigrationIncomingState {
     QEMUFile *from_src_file;
@@ -217,6 +226,20 @@ struct MigrationIncomingState {
      * is needed as this field is updated serially.
      */
     unsigned int switchover_ack_pending_num;
+
+    /*
+     * One entry per vCPU thread, and indexed by cpu_index.
+     * Support 128 CPUs first.
+     * TODO: remove hardcoding 128.
+     */
+    CgsPrivateFaultReq private_fault_req[128];
+    QemuSpin req_pending_list_lock;
+    /* List added by vCPU threads and removed by the fault thread */
+    QSIMPLEQ_HEAD(, CgsPrivateFaultReq) private_fault_req_pending_list;
+
+    QemuSpin req_sent_list_lock;
+    /* List added by the fault thread and removed by the ram listen thread */
+    QSIMPLEQ_HEAD(, CgsPrivateFaultReq) private_fault_req_sent_list;
 };
 
 MigrationIncomingState *migration_incoming_get_current(void);
@@ -492,7 +515,8 @@ void migrate_send_rp_pong(MigrationIncomingState *mis,
 int migrate_send_rp_req_pages(MigrationIncomingState *mis, RAMBlock *rb,
                               ram_addr_t start, uint64_t haddr);
 int migrate_send_rp_message_req_pages(MigrationIncomingState *mis,
-                                      RAMBlock *rb, ram_addr_t start);
+                                      RAMBlock *rb, ram_addr_t start,
+                                      bool is_private);
 void migrate_send_rp_recv_bitmap(MigrationIncomingState *mis,
                                  char *block_name);
 void migrate_send_rp_resume_ack(MigrationIncomingState *mis, uint32_t value);
@@ -519,5 +543,8 @@ void migration_cancel(const Error *error);
 void populate_vfio_info(MigrationInfo *info);
 void reset_vfio_bytes_transferred(void);
 void postcopy_temp_page_reset(PostcopyTmpPage *tmp_page);
-
+void postcopy_add_private_fault_to_pending_list(RAMBlock *rb,
+                                                ram_addr_t offset,
+                                                hwaddr gpa,
+                                                int cpu_index);
 #endif

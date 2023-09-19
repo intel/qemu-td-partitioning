@@ -51,14 +51,15 @@ uint64_t ram_bytes_total(void);
 void mig_throttle_counter_reset(void);
 
 uint64_t ram_pagesize_summary(void);
-int ram_save_queue_pages(const char *rbname, ram_addr_t start, ram_addr_t len);
+int ram_save_queue_pages(const char *rbname, ram_addr_t start,
+                         ram_addr_t len, bool is_private);
 void ram_postcopy_migrated_memory_release(MigrationState *ms);
 /* For outgoing discard bitmap */
 void ram_postcopy_send_discard_bitmap(MigrationState *ms);
 /* For incoming postcopy discard */
 int ram_discard_range(const char *block_name, uint64_t start, size_t length);
 int ram_postcopy_incoming_init(MigrationIncomingState *mis);
-int ram_load_postcopy(QEMUFile *f, int channel);
+int ram_load_postcopy(QEMUFile *f, uint32_t channel);
 
 void ram_handle_compressed(void *host, uint8_t ch, uint64_t size);
 
@@ -67,7 +68,7 @@ void ram_release_page(const char *rbname, uint64_t offset);
 
 int ramblock_recv_bitmap_test(RAMBlock *rb, void *host_addr);
 bool ramblock_recv_bitmap_test_byte_offset(RAMBlock *rb, uint64_t byte_offset);
-void ramblock_recv_bitmap_set(RAMBlock *rb, void *host_addr);
+void ramblock_recv_bitmap_set(RAMBlock *rb, ram_addr_t offset);
 void ramblock_recv_bitmap_set_range(RAMBlock *rb, void *host_addr, size_t nr);
 int64_t ramblock_recv_bitmap_send(QEMUFile *file,
                                   const char *block_name);
@@ -77,7 +78,8 @@ void postcopy_preempt_shutdown_file(MigrationState *s);
 void *postcopy_preempt_thread(void *opaque);
 
 size_t ram_save_cgs_ram_header(QEMUFile *f, RAMBlock *block,
-                               ram_addr_t offset, void *pss_context);
+                               ram_addr_t offset, bool cancel,
+                               void *pss_context);
 void ram_save_cgs_epoch_header(QEMUFile *f);
 
 void ram_save_abort(void);

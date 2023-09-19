@@ -65,6 +65,7 @@
 #include "yank_functions.h"
 #include "sysemu/qtest.h"
 #include "options.h"
+#include "sysemu/kvm.h"
 
 static NotifierList migration_state_notifiers =
     NOTIFIER_LIST_INITIALIZER(migration_state_notifiers);
@@ -80,6 +81,8 @@ enum mig_rp_message_type {
     MIG_RP_MSG_RECV_BITMAP,  /* send recved_bitmap back to source */
     MIG_RP_MSG_RESUME_ACK,   /* tell source that we are ready to resume */
     MIG_RP_MSG_SWITCHOVER_ACK, /* Tell source it's OK to do switchover */
+    MIG_RP_MSG_REQ_PRIVATE_PAGES_ID,
+    MIG_RP_MSG_REQ_PRIVATE_PAGES,
 
     MIG_RP_MSG_MAX
 };
@@ -94,9 +97,8 @@ static MigrationIncomingState *current_incoming;
 static GSList *migration_blockers;
 
 static bool migration_object_check(MigrationState *ms, Error **errp);
-static int migration_maybe_pause(MigrationState *s,
-                                 int *current_active_state,
-                                 int new_state);
+static int migration_pause(MigrationState *s, int *current_active_state,
+                           int new_state);
 static void migrate_fd_cancel(MigrationState *s);
 
 static bool migration_needs_multiple_sockets(void)
@@ -131,6 +133,8 @@ static gint page_request_addr_cmp(gconstpointer ap, gconstpointer bp)
 
 void migration_object_init(void)
 {
+    int i;
+
     /* This can only be called once. */
     assert(!current_migration);
     current_migration = MIGRATION_OBJ(object_new(TYPE_MIGRATION));
@@ -154,6 +158,14 @@ void migration_object_init(void)
 
     qemu_mutex_init(&current_incoming->page_request_mutex);
     current_incoming->page_requested = g_tree_new(page_request_addr_cmp);
+    qemu_spin_init(&current_incoming->req_pending_list_lock);
+    qemu_spin_init(&current_incoming->req_sent_list_lock);
+    QSIMPLEQ_INIT(&current_incoming->private_fault_req_pending_list);
+    QSIMPLEQ_INIT(&current_incoming->private_fault_req_sent_list);
+
+    for (i = 0; i < 128; i++) {
+        qemu_sem_init(&current_incoming->private_fault_req[i].sem, 0);
+    }
 
     migration_object_check(current_migration, &error_fatal);
 
@@ -321,7 +333,8 @@ static int migrate_send_rp_message(MigrationIncomingState *mis,
  *   Len: Length in bytes required - must be a multiple of pagesize
  */
 int migrate_send_rp_message_req_pages(MigrationIncomingState *mis,
-                                      RAMBlock *rb, ram_addr_t start)
+                                      RAMBlock *rb, ram_addr_t start,
+                                      bool is_private)
 {
     uint8_t bufc[12 + 1 + 255]; /* start (8), len (4), rbname up to 256 */
     size_t msglen = 12; /* start + len */
@@ -349,9 +362,17 @@ int migrate_send_rp_message_req_pages(MigrationIncomingState *mis,
         bufc[msglen++] = rbname_len;
         memcpy(bufc + msglen, rbname, rbname_len);
         msglen += rbname_len;
-        msg_type = MIG_RP_MSG_REQ_PAGES_ID;
+        if (is_private) {
+            msg_type = MIG_RP_MSG_REQ_PRIVATE_PAGES_ID;
+        } else {
+            msg_type = MIG_RP_MSG_REQ_PAGES_ID;
+        }
     } else {
-        msg_type = MIG_RP_MSG_REQ_PAGES;
+        if (is_private) {
+             msg_type = MIG_RP_MSG_REQ_PRIVATE_PAGES;
+        } else {
+             msg_type = MIG_RP_MSG_REQ_PAGES;
+        }
     }
 
     return migrate_send_rp_message(mis, msg_type, msglen, bufc);
@@ -385,7 +406,7 @@ int migrate_send_rp_req_pages(MigrationIncomingState *mis,
         return 0;
     }
 
-    return migrate_send_rp_message_req_pages(mis, rb, start);
+    return migrate_send_rp_message_req_pages(mis, rb, start, false);
 }
 
 static bool migration_colo_enabled;
@@ -1749,6 +1770,9 @@ static struct rp_cmd_args {
     [MIG_RP_MSG_RECV_BITMAP]    = { .len = -1, .name = "RECV_BITMAP" },
     [MIG_RP_MSG_RESUME_ACK]     = { .len =  4, .name = "RESUME_ACK" },
     [MIG_RP_MSG_SWITCHOVER_ACK] = { .len =  0, .name = "SWITCHOVER_ACK" },
+    [MIG_RP_MSG_REQ_PRIVATE_PAGES] = { .len = 12, .name = "REQ_PRIVATE_PAGES" },
+    [MIG_RP_MSG_REQ_PRIVATE_PAGES_ID]   = { .len = -1,
+                                            .name = "REQ_PRIVATE_PAGES_ID" },
     [MIG_RP_MSG_MAX]            = { .len = -1, .name = "MAX" },
 };
 
@@ -1758,7 +1782,8 @@ static struct rp_cmd_args {
  * and we don't need to send pages that have already been sent.
  */
 static void migrate_handle_rp_req_pages(MigrationState *ms, const char* rbname,
-                                       ram_addr_t start, size_t len)
+                                       ram_addr_t start, size_t len,
+                                       bool is_private)
 {
     long our_host_ps = qemu_real_host_page_size();
 
@@ -1776,7 +1801,7 @@ static void migrate_handle_rp_req_pages(MigrationState *ms, const char* rbname,
         return;
     }
 
-    if (ram_save_queue_pages(rbname, start, len)) {
+    if (ram_save_queue_pages(rbname, start, len, is_private)) {
         mark_source_rp_bad(ms);
     }
 }
@@ -1871,6 +1896,7 @@ static void *source_return_path_thread(void *opaque)
     uint32_t tmp32, sibling_error;
     ram_addr_t start = 0; /* =0 to silence warning */
     size_t  len = 0, expected_len;
+    bool is_private;
     int res;
 
     trace_source_return_path_thread_entry();
@@ -1917,6 +1943,7 @@ retry:
             goto out;
         }
 
+        is_private = false;
         /* OK, we have the message and the data */
         switch (header_type) {
         case MIG_RP_MSG_SHUT:
@@ -1939,12 +1966,18 @@ retry:
             qemu_sem_post(&ms->rp_state.rp_pong_acks);
             break;
 
+        case MIG_RP_MSG_REQ_PRIVATE_PAGES:
+            is_private = true;
+            QEMU_FALLTHROUGH;
         case MIG_RP_MSG_REQ_PAGES:
             start = ldq_be_p(buf);
             len = ldl_be_p(buf + 8);
-            migrate_handle_rp_req_pages(ms, NULL, start, len);
+            migrate_handle_rp_req_pages(ms, NULL, start, len, is_private);
             break;
 
+        case MIG_RP_MSG_REQ_PRIVATE_PAGES_ID:
+            is_private = true;
+            QEMU_FALLTHROUGH;
         case MIG_RP_MSG_REQ_PAGES_ID:
             expected_len = 12 + 1; /* header + termination */
 
@@ -1962,7 +1995,8 @@ retry:
                 mark_source_rp_bad(ms);
                 goto out;
             }
-            migrate_handle_rp_req_pages(ms, (char *)&buf[13], start, len);
+            migrate_handle_rp_req_pages(ms, (char *)&buf[13], start, len,
+                                        is_private);
             break;
 
         case MIG_RP_MSG_RECV_BITMAP:
@@ -2120,8 +2154,7 @@ static int postcopy_start(MigrationState *ms)
         goto fail;
     }
 
-    ret = migration_maybe_pause(ms, &cur_state,
-                                MIGRATION_STATUS_POSTCOPY_ACTIVE);
+    ret = migration_pause(ms, &cur_state, MIGRATION_STATUS_POSTCOPY_ACTIVE);
     if (ret < 0) {
         goto fail;
     }
@@ -2131,12 +2164,16 @@ static int postcopy_start(MigrationState *ms)
         goto fail;
     }
     restart_block = true;
+    ret = qemu_savevm_state_prepare_postcopy(ms->to_dst_file);
+    if (ret < 0) {
+        goto fail;
+    }
 
     /*
      * Cause any non-postcopiable, but iterative devices to
      * send out their final data.
      */
-    qemu_savevm_state_complete_precopy(ms->to_dst_file, true, false);
+    qemu_savevm_state_complete_precopy(ms->to_dst_file, true, false, true);
 
     /*
      * in Finish migrate and with the io-lock held everything should
@@ -2181,7 +2218,7 @@ static int postcopy_start(MigrationState *ms)
      */
     qemu_savevm_send_postcopy_listen(fb);
 
-    qemu_savevm_state_complete_precopy(fb, false, false);
+    qemu_savevm_state_complete_precopy(fb, false, false, false);
     if (migrate_postcopy_ram()) {
         qemu_savevm_send_ping(fb, 3);
     }
@@ -2356,7 +2393,7 @@ static void migration_completion(MigrationState *s)
             s->block_inactive = !migrate_colo();
             migration_rate_set(RATE_LIMIT_DISABLED);
             ret = qemu_savevm_state_complete_precopy(s->to_dst_file, false,
-                                                     s->block_inactive);
+                                                     s->block_inactive, true);
         }
 
         qemu_mutex_unlock_iothread();
