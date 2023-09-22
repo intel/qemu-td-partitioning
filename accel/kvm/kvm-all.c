@@ -3184,6 +3184,7 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private,
 
         ret = kvm_convert_memory_private_mr(start, size, to_private,
                                             need_discard, cpu_index);
+        memory_region_convert_mem_attr(&section, !to_private);
     } else {
         ret = kvm_convert_memory_shared_mr(section.mr,
                                            start, size, to_private);
