@@ -85,6 +85,7 @@ static Property pci_props[] = {
                     QEMU_PCIE_ERR_UNC_MASK_BITNR, true),
     DEFINE_PROP_BIT("x-pcie-ari-nextfn-1", PCIDevice, cap_present,
                     QEMU_PCIE_ARI_NEXTFN_1_BITNR, false),
+    DEFINE_PROP_BOOL("bypass-iommu", PCIDevice, bypass_iommu, true),
     DEFINE_PROP_END_OF_LIST()
 };
 
@@ -2738,6 +2739,9 @@ AddressSpace *pci_device_iommu_address_space(PCIDevice *dev)
     PCIBus *bus;
     PCIBus *iommu_bus;
     uint8_t devfn;
+
+    if (dev->bypass_iommu)
+        return &address_space_memory;
 
     pci_device_get_iommu_bus_devfn(dev, &bus, &iommu_bus, &devfn);
     if (!pci_bus_bypass_iommu(bus) && iommu_bus &&

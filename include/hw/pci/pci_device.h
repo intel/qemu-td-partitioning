@@ -160,6 +160,8 @@ struct PCIDevice {
     /* ID of standby device in net_failover pair */
     char *failover_pair_id;
     uint32_t acpi_index;
+
+    bool bypass_iommu;
 };
 
 static inline int pci_intx(PCIDevice *pci_dev)

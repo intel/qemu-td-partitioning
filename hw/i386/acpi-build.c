@@ -2119,27 +2119,36 @@ insert_scope(PCIBus *bus, PCIDevice *dev, void *opaque)
     const size_t device_scope_size = 6 /* device scope structure */ +
                                      2 /* 1 path entry */;
     GArray *scope_blob = opaque;
+    bool add = false;
 
     if (object_dynamic_cast(OBJECT(dev), TYPE_PCI_BRIDGE)) {
         /* Dmar Scope Type: 0x02 for PCI Bridge */
         build_append_int_noprefix(scope_blob, 0x02, 1);
+        add = true;
     } else {
-        /* Dmar Scope Type: 0x01 for PCI Endpoint Device */
-        build_append_int_noprefix(scope_blob, 0x01, 1);
+        if (!dev->bypass_iommu) {
+            add = true;
+            /* Dmar Scope Type: 0x01 for PCI Endpoint Device */
+            build_append_int_noprefix(scope_blob, 0x01, 1);
+        }
     }
 
-    /* length */
-    build_append_int_noprefix(scope_blob, device_scope_size, 1);
-    /* reserved */
-    build_append_int_noprefix(scope_blob, 0, 2);
-    /* enumeration_id */
-    build_append_int_noprefix(scope_blob, 0, 1);
-    /* bus */
-    build_append_int_noprefix(scope_blob, pci_bus_num(bus), 1);
-    /* device */
-    build_append_int_noprefix(scope_blob, PCI_SLOT(dev->devfn), 1);
-    /* function */
-    build_append_int_noprefix(scope_blob, PCI_FUNC(dev->devfn), 1);
+    if (add) {
+        /* length */
+        build_append_int_noprefix(scope_blob, device_scope_size, 1);
+        /* reserved */
+        build_append_int_noprefix(scope_blob, 0, 2);
+        /* enumeration_id */
+        build_append_int_noprefix(scope_blob, 0, 1);
+        /* bus */
+        build_append_int_noprefix(scope_blob, pci_bus_num(bus), 1);
+        /* device */
+        build_append_int_noprefix(scope_blob, PCI_SLOT(dev->devfn), 1);
+        /* function */
+        build_append_int_noprefix(scope_blob, PCI_FUNC(dev->devfn), 1);
+        printf("%s: insert dev(%02x:%02x.%d) to scope.\n",
+               __func__, pci_bus_num(bus), PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn));
+    }
 }
 
 /* For a given PCI host bridge, walk and insert DMAR scope */
