@@ -926,8 +926,11 @@ bool vfio_migration_realize(VFIODevice *vbasedev, Error **errp)
             goto add_blocker;
         }
 
+        /* TODO: idxd doesn't support such ops yet */
+#if 0
         warn_report("%s: VFIO device doesn't support device dirty tracking",
                     vbasedev->name);
+#endif
     }
 
     ret = vfio_block_multiple_devices_migration(vbasedev, errp);

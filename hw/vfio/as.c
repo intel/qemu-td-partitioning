@@ -161,7 +161,7 @@ void vfio_unblock_multiple_devices_migration(void)
 
 bool vfio_viommu_preset(VFIODevice *vbasedev)
 {
-    return vbasedev->container->space->as != &address_space_memory;
+    return false;
 }
 
 static void vfio_set_migration_error(int err)
