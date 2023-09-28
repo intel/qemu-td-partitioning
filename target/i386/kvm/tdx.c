@@ -1112,6 +1112,12 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
                                                     TYPE_TDX_GUEST);
 
+    if (!tdx) {
+        error_setg(errp, "Object type '%s' is not a '%s' subclass",
+                object_get_typename(OBJECT(ms->cgs)), TYPE_TDX_GUEST);
+        return -EINVAL;
+    }
+
     if (x86ms->smm == ON_OFF_AUTO_AUTO) {
         x86ms->smm = ON_OFF_AUTO_OFF;
     } else if (x86ms->smm == ON_OFF_AUTO_ON) {
