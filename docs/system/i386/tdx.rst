@@ -31,11 +31,13 @@ device and it actually works as RAM. "-bios" option is chosen to load TDVF.
 OVMF is the opensource firmware that implements the TDVF support. Thus the
 command line to specify and load TDVF is ``-bios OVMF.fd``
 
-Restricted Memory memory-backend
+KVM private gmem
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TD's memory need to be back'ed by restricted memfd. Otherwise it cannot handle
-KVM_EXIT_MEMORY_FAULT exit from KVM.
+TD's memory (RAM) need to be able to be transformed between private and shared.
+And its BIOS (OVMF/TDVF) needs to be mapped as private. Thus QEMU needs to
+allocate private gmem for them via KVM's IOCTL (KVM_CREATE_GUEST_MEMFD), which
+requires KVM is newer enough with gmem support.
 
 Feature Control
 ---------------
@@ -76,9 +78,9 @@ To launch a TDX guest:
 .. parsed-literal::
 
     |qemu_system_x86| \\
-        -object memory-backend-memfd-private,id=ram1,size=${mem} \\
+        -object memory-backend-ram,id=mem0,size=${mem},private=on \\
         -object tdx-guest,id=tdx0 \\
-        -machine ...,kernel-irqchip=split,confidential-guest-support=tdx0,memory-backend=ram1 \\
+        -machine ...,kernel-irqchip=split,confidential-guest-support=tdx0,memory-backend=mem0 \\
         -bios OVMF.fd \\
 
 Debugging
