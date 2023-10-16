@@ -921,7 +921,8 @@
             '*migtd-hash': 'str',
             '*vtpm-userid': 'str',
             '*vtpm-type': 'str',
-            '*vtpm-path': 'str'  } }
+            '*vtpm-path': 'str',
+            '*num-l2-vms': 'uint8' } }
 
 ##
 # @ThreadContextProperties:

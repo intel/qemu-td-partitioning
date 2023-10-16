@@ -153,6 +153,8 @@ typedef struct TdxGuest {
     uint32_t migtd_pid;
     uint64_t migtd_attr;
     uint8_t migtd_hash[48];  /* sha348 digest */
+
+    uint8_t num_l2_vms;
 } TdxGuest;
 
 #ifdef CONFIG_TDX
