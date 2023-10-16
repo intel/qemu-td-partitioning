@@ -96,6 +96,7 @@ struct tdx_capabilities {
     uint64_t attrs_fixed1;
     uint64_t xfam_fixed0;
     uint64_t xfam_fixed1;
+    uint8_t max_num_l2_vms;
 
     uint16_t nr_cpuid_configs;
     struct tdx_cpuid_config cpuid_configs[];
@@ -808,6 +809,7 @@ static void get_tdx_capabilities(void)
     tdx_caps->xfam_fixed0 = caps->xfam_fixed0;
     tdx_caps->xfam_fixed1 = caps->xfam_fixed1;
     tdx_caps->nr_cpuid_configs = caps->nr_cpuid_configs;
+    tdx_caps->max_num_l2_vms = caps->max_num_l2_vms;
     for (i = 0; i < tdx_caps->nr_cpuid_configs; i++) {
         struct kvm_tdx_cpuid_config *kvm = &caps->cpuid_configs[i];
         struct tdx_cpuid_config *dest = &tdx_caps->cpuid_configs[i];
