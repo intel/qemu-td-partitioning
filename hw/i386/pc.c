@@ -1765,6 +1765,20 @@ static void pc_machine_set_max_fw_size(Object *obj, Visitor *v,
     pcms->max_fw_size = value;
 }
 
+static char *pc_machine_get_firmware(Object *obj, Error **errp)
+{
+    PCMachineState *pcms = PC_MACHINE(obj);
+
+    return g_strdup(pcms->firmware2);
+}
+
+static void pc_machine_set_firmware(Object *obj, const char *value, Error **errp)
+{
+    PCMachineState *pcms = PC_MACHINE(obj);
+
+    g_free(pcms->firmware2);
+    pcms->firmware2 = g_strdup(value);
+}
 
 static void pc_machine_initfn(Object *obj)
 {
@@ -1932,6 +1946,11 @@ static void pc_machine_class_init(ObjectClass *oc, void *data)
         NULL, NULL);
     object_class_property_set_description(oc, PC_MACHINE_SMBIOS_EP,
         "SMBIOS Entry Point type [32, 64]");
+
+    object_class_property_add_str(oc, "l2bios",
+        pc_machine_get_firmware, pc_machine_set_firmware);
+    object_class_property_set_description(oc, "l2bios",
+        "Firmware image for L2");
 }
 
 static const TypeInfo pc_machine_info = {

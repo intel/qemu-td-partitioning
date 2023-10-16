@@ -155,6 +155,7 @@ typedef struct TdxGuest {
     uint8_t migtd_hash[48];  /* sha348 digest */
 
     uint8_t num_l2_vms;
+    MemoryRegion *bios2_region;
 } TdxGuest;
 
 #ifdef CONFIG_TDX
@@ -168,6 +169,7 @@ void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
                              uint32_t *ret);
 int tdx_pre_create_vcpu(CPUState *cpu);
 void tdx_set_tdvf_region(MemoryRegion *tdvf_region);
+void tdx_set_bios2_region(MemoryRegion *bios2_region);
 int tdx_parse_tdvf(void *flash_ptr, int size);
 void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit);
 void tdx_apply_xfam_dependencies(CPUState *cpu);

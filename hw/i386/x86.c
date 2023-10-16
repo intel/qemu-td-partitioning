@@ -1164,12 +1164,13 @@ void x86_load_linux(X86MachineState *x86ms,
 }
 
 void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
-                       MemoryRegion *rom_memory, bool isapc_ram_fw)
+                       const char *firmware2, MemoryRegion *rom_memory,
+                       bool isapc_ram_fw)
 {
     const char *bios_name;
-    char *filename;
-    MemoryRegion *bios, *isa_bios;
-    int bios_size, isa_bios_size;
+    char *filename, *filename2 = NULL;
+    MemoryRegion *bios, *bios2 = NULL, *isa_bios;
+    int bios_size, bios2_size = 0, isa_bios_size;
     ssize_t ret;
     X86MachineState *x86ms = X86_MACHINE(ms);
 
@@ -1205,6 +1206,27 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
         void *ptr = memory_region_get_ram_ptr(bios);
         load_image_size(filename, ptr, bios_size);
         x86_firmware_configure(ptr, bios_size);
+
+        if (firmware2) {
+            /* BIOS2 load */
+            bios_name = firmware2;
+            filename2 = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
+            if (filename2) {
+                bios2_size = get_image_size(filename2);
+            } else {
+                bios2_size = -1;
+            }
+            if (bios2_size <= 0 ||
+                    (bios2_size % 65536) != 0) {
+                goto bios_error;
+            }
+            bios2 = g_malloc(sizeof(*bios2));
+            memory_region_init_ram_gmem(bios2, NULL, "pc.bios2", bios2_size, &error_fatal);
+            tdx_set_bios2_region(bios2);
+
+            ptr = memory_region_get_ram_ptr(bios2);
+            load_image_size(filename2, ptr, bios2_size);
+        }
     } else {
         if (!isapc_ram_fw) {
             memory_region_set_readonly(bios, true);
@@ -1215,6 +1237,7 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
         }
     }
     g_free(filename);
+    g_free(filename2);
 
     /* For TDX, alias different GPAs to same private memory is not supported */
     if (x86ms->vm_type != KVM_X86_SW_PROTECTED_VM && !is_tdx_vm()) {
@@ -1231,9 +1254,16 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
             memory_region_set_readonly(isa_bios, true);
         }
     }
-    /* map all the bios at the top of memory */
+
+    if (bios2) {
+        /* map bios2 at the top of memory */
+        memory_region_add_subregion(rom_memory,
+                                    (uint32_t)(-bios2_size),
+                                    bios2);
+    }
+    /* map bios right below bios2, or at the top of memory */
     memory_region_add_subregion(rom_memory,
-                                (uint32_t)(-bios_size),
+                                (uint32_t)(-(bios_size + bios2_size)),
                                 bios);
     return;
 
