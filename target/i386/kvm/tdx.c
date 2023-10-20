@@ -768,14 +768,14 @@ out:
     return r;
 }
 
-static void get_tdx_capabilities(void)
+static void get_tdx_capabilities(bool try_sysfs)
 {
     struct kvm_tdx_capabilities *caps;
     /* tdxio seam module 2.0 reports 8 cpuid configs */
     int nr_cpuid_configs = 8;
     int r, size, i;
 
-    if (!get_tdx_capabilities_by_sysfs())
+    if (try_sysfs && !get_tdx_capabilities_by_sysfs())
         return;
     warn_report("KVM TDX sysfs doesn't seem suported. fallback to the old ioctl");
 
@@ -1267,7 +1267,9 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
     x86ms->eoi_intercept_unsupported = true;
 
     if (!tdx_caps) {
-        get_tdx_capabilities();
+	 bool try_sysfs = tdx->num_l2_vms ? false : true;
+
+        get_tdx_capabilities(try_sysfs);
     }
 
     /* Sanity check. The num_l2_vms should not exceed the max_num_l2_vms */
