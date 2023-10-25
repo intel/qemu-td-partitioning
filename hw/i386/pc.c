@@ -1829,6 +1829,20 @@ static void pc_machine_set_vfio_identity_bars(Object *obj, bool value, Error **e
     pcms->vfio_identity_bars = value;
 }
 
+static bool pc_machine_get_vfio_allow_noiommu(Object *obj, Error **errp)
+{
+    PCMachineState *pcms = PC_MACHINE(obj);
+
+    return pcms->vfio_allow_noiommu;
+}
+
+static void pc_machine_set_vfio_allow_noiommu(Object *obj, bool value, Error **errp)
+{
+    PCMachineState *pcms = PC_MACHINE(obj);
+
+    pcms->vfio_allow_noiommu = value;
+}
+
 static char *pc_machine_get_firmware(Object *obj, Error **errp)
 {
     PCMachineState *pcms = PC_MACHINE(obj);
@@ -2020,6 +2034,11 @@ static void pc_machine_class_init(ObjectClass *oc, void *data)
         pc_machine_get_vfio_identity_bars, pc_machine_set_vfio_identity_bars);
     object_class_property_set_description(oc, "vfio-identity-bars",
         "Enable/disable VFIO to use native bar address");
+
+    object_class_property_add_bool(oc, "vfio-allow-noiommu",
+        pc_machine_get_vfio_allow_noiommu, pc_machine_set_vfio_allow_noiommu);
+    object_class_property_set_description(oc, "vfio-allow-noiommu",
+        "Enable/disable VFIO to passthrough device without IOMMU");
 }
 
 static const TypeInfo pc_machine_info = {

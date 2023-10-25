@@ -50,6 +50,7 @@ typedef struct PCMachineState {
     bool hpet_enabled;
     bool i8042_enabled;
     bool vfio_identity_bars;
+    bool vfio_allow_noiommu;
     bool default_bus_bypass_iommu;
     uint64_t max_fw_size;
 

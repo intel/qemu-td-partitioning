@@ -2910,6 +2910,9 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
         } else if (object_property_get_bool(OBJECT(ms), "vfio-identity-bars", &local_err)) {
                 error_report("vfio-identity-bars: only support td-part-enlighten VM");
                 exit(1);
+        } else if (object_property_get_bool(OBJECT(ms), "vfio-allow-noiommu", &local_err)) {
+                error_report("vfio-allow-noiommu: only support td-part-enlighten VM");
+                exit(1);
         }
     }
 

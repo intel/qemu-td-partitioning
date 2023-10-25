@@ -639,6 +639,12 @@ static bool vfio_get_section_iova_range(VFIOContainer *container,
     return true;
 }
 
+static void vfio_listener_region_add_noop(MemoryListener *listener,
+                                     MemoryRegionSection *section)
+{
+	return;
+}
+
 static void vfio_listener_region_add(MemoryListener *listener,
                                      MemoryRegionSection *section)
 {
@@ -798,6 +804,12 @@ fail:
         error_report_err(err);
         hw_error("vfio: DMA mapping failed, unable to continue");
     }
+}
+
+static void vfio_listener_region_del_noop(MemoryListener *listener,
+                                     MemoryRegionSection *section)
+{
+	return;
 }
 
 static void vfio_listener_region_del(MemoryListener *listener,
@@ -1390,6 +1402,17 @@ const MemoryListener vfio_memory_listener = {
     .name = "vfio",
     .region_add = vfio_listener_region_add,
     .region_del = vfio_listener_region_del,
+    .log_global_start = vfio_listener_log_global_start,
+    .log_global_stop = vfio_listener_log_global_stop,
+    .log_sync = vfio_listener_log_sync,
+    .convert_mem_attr = vfio_listener_convert_mem_attr,
+};
+
+/* do we need it? */
+const MemoryListener vfio_memory_noop_listener = {
+    .name = "vfio",
+    .region_add = vfio_listener_region_add_noop,
+    .region_del = vfio_listener_region_del_noop,
     .log_global_start = vfio_listener_log_global_start,
     .log_global_stop = vfio_listener_log_global_stop,
     .log_sync = vfio_listener_log_sync,

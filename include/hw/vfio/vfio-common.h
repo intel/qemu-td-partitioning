@@ -38,6 +38,7 @@
 #define TYPE_VFIO_IOMMU_DEVICE "qemu:vfio-iommu-device"
 
 extern const MemoryListener vfio_memory_listener;
+extern const MemoryListener vfio_memory_noop_listener;
 
 enum {
     VFIO_DEVICE_TYPE_PCI = 0,
