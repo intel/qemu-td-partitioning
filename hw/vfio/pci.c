@@ -1784,6 +1784,57 @@ static void vfio_bars_register(VFIOPCIDevice *vdev)
     }
 }
 
+static int vfio_bar_set_identity_addr(VFIOPCIDevice *vdev, int nr)
+{
+    PCIDevice *pdev = &vdev->pdev;
+    VFIOBAR *bar = &vdev->bars[nr];
+    size_t len = sizeof(uint32_t);
+    struct {
+        uint32_t lo;
+        uint32_t hi;
+    } pci_bar;
+    uint32_t val;
+    int ret;
+
+    /* Skip both unimplemented BARs and the upper half of 64bit BARS. */
+    if (!bar->region.size)
+        return 0;
+
+    if (bar->mem64)
+        len = sizeof(uint64_t);
+
+    ret = pread(vdev->vbasedev.fd, &pci_bar, len,
+                vdev->config_offset + PCI_BASE_ADDRESS_0 + (4 * nr));
+    if (ret != len) {
+        error_report("vfio: Failed to read BAR %d (%m)", nr);
+        return -errno;
+    }
+
+    val = le32_to_cpu(pci_bar.lo);
+    vfio_pci_write_config(pdev, PCI_BASE_ADDRESS_0 + (4 * nr),
+                          val, sizeof(val));
+    if (bar->mem64) {
+        val = le32_to_cpu(pci_bar.hi);
+        vfio_pci_write_config(pdev, PCI_BASE_ADDRESS_0 + (4 * ++nr),
+                              val, sizeof(val));
+    }
+
+    return 0;
+}
+
+static int vfio_bars_set_identity_addr(VFIOPCIDevice *vdev)
+{
+    int i, ret;
+
+    for (i = 0; i < PCI_ROM_SLOT; i++) {
+        ret = vfio_bar_set_identity_addr(vdev, i);
+	if (ret)
+		return ret;
+    }
+
+    return 0;
+}
+
 static void vfio_bars_exit(VFIOPCIDevice *vdev)
 {
     int i;
@@ -3491,6 +3542,14 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
     }
 
     vfio_bars_register(vdev);
+
+    if (object_property_get_bool(OBJECT(qdev_get_machine()),
+                                 "vfio-identity-bars", &err)) {
+        ret = vfio_bars_set_identity_addr(vdev);
+        if (ret) {
+            goto out_teardown;
+        }
+    }
 
     if (vbasedev->iommufd) {
         ret = pci_device_set_iommu_device(pdev, &vbasedev->idev);
